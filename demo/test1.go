@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
 	"os"
-	"strings"
 	"sync"
 )
 
@@ -264,25 +264,56 @@ func main() {
 	//result := append(slice, slice2...)
 	//fmt.Println(result)
 
-	//type Person struct {
-	//	Name string         `json:"name"`
-	//	Age  map[string]any `json:"age"`
-	//	ID   struct {
-	//		Number string `json:"number"`
-	//	} `json:"id"`
-	//}
-	//p := Person{
-	//	Name: "Bt",
-	//	Age: map[string]any{
+	//command := map[string]any{
+	//	"Name": "Bt",
+	//	"Age": map[string]any{
 	//		"Bt": 12,
 	//		"Askel": map[string]any{
 	//			"内置": 15,
 	//		},
 	//	},
 	//}
+	//var personConfig *Person
+
+	type Person struct {
+		Name string         `json:"name"`
+		Age  map[string]any `json:"age"`
+		ID   struct {
+			Number string `json:"number"`
+		} `json:"id"`
+	}
+
+	p := Person{
+		Name: "Bt",
+		Age: map[string]any{
+			"Bt": 12,
+			"Askel": map[string]any{
+				"内置": 15,
+			},
+		},
+	}
+
+	marshal, err := jsoniter.Marshal(p)
+	if err != nil {
+		return
+	}
+	fmt.Println(string(marshal))
+	err = jsoniter.Unmarshal(marshal, &p) // 将json转换为Go对象
+	if err != nil {
+		fmt.Println(err) // 处理错误
+	}
+	fmt.Println(p.Name, p.Age, p.ID.Number) // 输出Go对象的属性
+
 	//bytes, _ := json.Marshal(p)
 	//fmt.Println(string(bytes))
-
+	//fmt.Println("________")
+	//
+	//var personConfig map[string]any
+	//err := json.Unmarshal(bytes, &personConfig)
+	//if err != nil {
+	//	return
+	//}
+	//fmt.Println(personConfig["name"].(string))
 	//file, err := os.ReadFile(".\\demo\\config.json")
 	//if err != nil {
 	//	fmt.Println("退出了0")
@@ -300,6 +331,16 @@ func main() {
 	////askel := config["age"].(map[string]any)
 	////fmt.Println(askel["Askel"])
 
-	str := "abcDe"
-	fmt.Println(strings.ToLower(str))
+	//str := "abcDe"
+	//fmt.Println(strings.ToLower(str))
+	//str := "abcdefw0123456789"
+	//fmt.Println(string([]byte(str)[8:]))
+	//var i = 10
+	//{
+	//	var i = 5
+	//	fmt.Println(i)
+	//}
+	//fmt.Println(i)
+	var flag bool
+	fmt.Println(flag)
 }

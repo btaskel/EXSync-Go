@@ -1,8 +1,8 @@
 package socket
 
 import (
-	"EXSync/core/modules/encryption"
-	"EXSync/core/modules/timedict"
+	"EXSync/core/internal/modules/encryption"
+	"EXSync/core/internal/modules/timedict"
 	"encoding/json"
 	"errors"
 	"net"
@@ -28,7 +28,7 @@ import (
 //	3: 当command传入, data为空，将会按照sendCommandNoTimedict()进行对话(特殊用途);
 //	4: 当data, command都传入, 第一条会通过command_socket发送至对方的指令处理,
 //	    接下来的会话将会使用data_socket进行处理(适用于指令环境下);
-func NewSession(timedict *timedict.SocketTimeDict, dataSocket net.Conn, commandSocket net.Conn, mark string, key string) (*Session, error) {
+func NewSession(timedict *timedict.SocketTimeDict, dataSocket, commandSocket net.Conn, mark, key string) (*Session, error) {
 
 	if len(mark) != 8 {
 		return nil, errors.New("SocketSession: Mark标识缺少")
@@ -40,16 +40,19 @@ func NewSession(timedict *timedict.SocketTimeDict, dataSocket net.Conn, commandS
 
 	method := 0
 	if dataSocket != nil && commandSocket != nil {
-		method = 0
+		panic("dataSocket & commandSocket未传入")
 	} else if dataSocket != nil && commandSocket == nil {
 		method = 1
 	} else {
 		method = 2
 	}
-
-	aesGcm, err := encryption.NewGCM(key)
-	if err != nil {
-		return nil, err
+	var aesGcm *encryption.Gcm = nil
+	var err error
+	if key != "" {
+		aesGcm, err = encryption.NewGCM(key)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &Session{
@@ -85,10 +88,10 @@ func (s *Session) GetSessionCount() int {
 
 // Send 如果发送为[]byte类型，则立即发送
 // 如果发送为map[string]interface{}类型，则立即发送
-func (s *Session) Send(data interface{}, output bool) (result map[string]interface{}, err error) {
+func (s *Session) Send(data any, output bool) (result map[string]any, err error) {
 	switch data.(type) {
-	case map[string]interface{}:
-		v := data.(map[string]interface{})
+	case map[string]any, map[string]string:
+		v := data.(map[string]any)
 		switch s.method {
 		case 0:
 			var conn net.Conn
@@ -154,7 +157,7 @@ func (s *Session) Send(data interface{}, output bool) (result map[string]interfa
 //	}
 //}
 
-func (s *Session) sendNoTimeDict(conn net.Conn, data interface{}, output bool) (map[string]interface{}, error) {
+func (s *Session) sendNoTimeDict(conn net.Conn, data any, output bool) (map[string]any, error) {
 
 	switch v := data.(type) {
 	case []byte:
@@ -199,16 +202,19 @@ func (s *Session) sendNoTimeDict(conn net.Conn, data interface{}, output bool) (
 			if s.aesGCM != nil {
 				result, err = s.aesGCM.AesGcmDecrypt(buf[:n])
 			} else {
+				if n <= 8 {
+					return nil, errors.New("dataLengthError")
+				}
 				result = buf[:n]
 			}
-			var decodeData map[string]interface{}
-			err = json.Unmarshal(result, &decodeData)
+			var decodeData map[string]any
+			err = json.Unmarshal(result[8:], &decodeData)
 			return decodeData, nil
 		} else {
 			return nil, nil
 		}
 
-	case map[string]interface{}:
+	case map[string]any:
 		if s.aesGCM != nil {
 			if len(v) > 4056 {
 				panic("sendNoTimeDict: 指令发送时大于1008个字节")
@@ -240,7 +246,7 @@ func (s *Session) sendNoTimeDict(conn net.Conn, data interface{}, output bool) (
 			if err != nil {
 				return nil, err
 			}
-			var decodeData map[string]interface{}
+			var decodeData map[string]any
 			err = json.Unmarshal(buf[:n], &decodeData)
 			return decodeData, nil
 		} else {

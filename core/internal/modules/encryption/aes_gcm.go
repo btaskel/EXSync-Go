@@ -63,7 +63,6 @@ func (g *Gcm) B64GCMEncrypt(data []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 

@@ -2,6 +2,8 @@ package hashext
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"crypto/sha512"
 	"fmt"
 	"github.com/cespare/xxhash/v2"
 	"io"
@@ -49,4 +51,11 @@ func getXXHash(path string) (fileHash string, err error) {
 	}
 	//return string(hasher.Sum(nil)), nil
 	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
+}
+
+func GetSha256(str string) string {
+	return fmt.Sprintf("%X", sha256.Sum256([]byte(str)))
+}
+func GetSha384(str string) string {
+	return fmt.Sprintf("%X", sha512.Sum384([]byte(str)))
 }

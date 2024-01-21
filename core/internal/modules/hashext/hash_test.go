@@ -19,3 +19,13 @@ func TestGetXXHash(t *testing.T) {
 	fmt.Println(hash)
 	t.Logf("hash: %v", hash)
 }
+
+func TestGetSha384(t *testing.T) {
+	hash := GetSha384("测试文字")
+	fmt.Println(hash)
+}
+
+func TestGetSha256(t *testing.T) {
+	hash := GetSha256("测试文字")
+	fmt.Println(hash)
+}

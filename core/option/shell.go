@@ -8,6 +8,10 @@ import (
 type Shell struct {
 }
 
+func init() {
+
+}
+
 func (s *Shell) setLogLevel(level string) {
 	log := logrus.New()
 	file, err := os.OpenFile("debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
