@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
 	"os"
 	"sync"
 )
@@ -275,34 +274,34 @@ func main() {
 	//}
 	//var personConfig *Person
 
-	type Person struct {
-		Name string         `json:"name"`
-		Age  map[string]any `json:"age"`
-		ID   struct {
-			Number string `json:"number"`
-		} `json:"id"`
-	}
-
-	p := Person{
-		Name: "Bt",
-		Age: map[string]any{
-			"Bt": 12,
-			"Askel": map[string]any{
-				"内置": 15,
-			},
-		},
-	}
-
-	marshal, err := jsoniter.Marshal(p)
-	if err != nil {
-		return
-	}
-	fmt.Println(string(marshal))
-	err = jsoniter.Unmarshal(marshal, &p) // 将json转换为Go对象
-	if err != nil {
-		fmt.Println(err) // 处理错误
-	}
-	fmt.Println(p.Name, p.Age, p.ID.Number) // 输出Go对象的属性
+	//type Person struct {
+	//	Name string         `json:"name"`
+	//	Age  map[string]any `json:"age"`
+	//	ID   struct {
+	//		Number string `json:"number"`
+	//	} `json:"id"`
+	//}
+	//
+	//p := Person{
+	//	Name: "Bt",
+	//	Age: map[string]any{
+	//		"Bt": 12,
+	//		"Askel": map[string]any{
+	//			"内置": 15,
+	//		},
+	//	},
+	//}
+	//
+	//marshal, err := jsoniter.Marshal(p)
+	//if err != nil {
+	//	return
+	//}
+	//fmt.Println(string(marshal))
+	//err = jsoniter.Unmarshal(marshal, &p) // 将json转换为Go对象
+	//if err != nil {
+	//	fmt.Println(err) // 处理错误
+	//}
+	//fmt.Println(p.Name, p.Age, p.ID.Number) // 输出Go对象的属性
 
 	//bytes, _ := json.Marshal(p)
 	//fmt.Println(string(bytes))
@@ -341,6 +340,30 @@ func main() {
 	//	fmt.Println(i)
 	//}
 	//fmt.Println(i)
-	var flag bool
-	fmt.Println(flag)
+	//var flag bool
+	//fmt.Println(flag)
+
+	//a := map[string]struct{}{"a": {}, "b": {}, "c": {}}
+	//for k := range a {
+	//	fmt.Printf(k)
+	//}
+	//fmt.Println(runtime.NumCPU())
+	type Server struct {
+		mergeSocket map[string]map[string]bool
+		flag        bool
+	}
+	server := Server{mergeSocket: map[string]map[string]bool{}}
+	server.mergeSocket["123"] = map[string]bool{
+		"a": true,
+	}
+	server.mergeSocket["123"] = map[string]bool{
+		"a": false,
+		"b": true,
+	}
+	k, ok := server.mergeSocket["test"]["abce"]
+
+	fmt.Println(k, ok)
+	fmt.Println(server.mergeSocket["123"])
+	fmt.Println(server.mergeSocket)
+	fmt.Println(server.flag)
 }

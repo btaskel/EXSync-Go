@@ -1,13 +1,15 @@
 package timedict
 
 import (
-	"EXSync/core/modules/encryption"
+	"EXSync/core/internal/modules/encryption"
 	"encoding/binary"
 	"io"
 	"net"
 	"sync"
 	"time"
 )
+
+const timeout = 8
 
 func NewTimeDict() *TimeDict {
 	timedict := &TimeDict{

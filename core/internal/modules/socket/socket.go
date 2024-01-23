@@ -5,6 +5,7 @@ import (
 	"EXSync/core/internal/modules/timedict"
 	"encoding/json"
 	"errors"
+	"github.com/sirupsen/logrus"
 	"net"
 )
 
@@ -56,28 +57,30 @@ func NewSession(timedict *timedict.SocketTimeDict, dataSocket, commandSocket net
 	}
 
 	return &Session{
-		timeDict:      timedict,
-		dataSocket:    dataSocket,
-		commandSocket: commandSocket,
-		mark:          mark,
-		method:        method,
-		aesGCM:        aesGcm,
+		timeDict:       timedict,
+		dataSocket:     dataSocket,
+		commandSocket:  commandSocket,
+		mark:           []byte(mark),
+		method:         method,
+		aesGCM:         aesGcm,
+		EncryptionLoss: 28,
 	}, nil
 }
 
 type Session struct {
-	timeDict      *timedict.SocketTimeDict
-	dataSocket    net.Conn
-	commandSocket net.Conn
-	mark          string
-	count         int
-	method        int
-	aesGCM        *encryption.Gcm
+	timeDict       *timedict.SocketTimeDict
+	dataSocket     net.Conn
+	commandSocket  net.Conn
+	mark           []byte
+	count          int
+	method         int
+	aesGCM         *encryption.Gcm
+	EncryptionLoss int
 }
 
 // Recv 从指定mark队列接收数据
 func (s *Session) Recv() (data []byte, ok bool) {
-	data, ok = s.timeDict.Get(s.mark)
+	data, ok = s.timeDict.Get(string(s.mark))
 	return
 }
 
@@ -110,30 +113,40 @@ func (s *Session) Send(data any, output bool) (result map[string]any, err error)
 	case []byte:
 		v := data.([]byte)
 		if s.aesGCM != nil {
-			if len(v) > 4056 {
-				panic("sendNoTimeDict: 指令发送时大于1008个字节")
-			} else if len(v) < 40 {
+			if len(v) > 4060 {
+				panic("sendNoTimeDict: 指令发送时大于4060个字节")
+			} else if len(v) < 36 {
 				panic("sendNoTimeDict: 指令发送时无字节")
 			}
-			byteData, err := s.aesGCM.AesGcmEncrypt(append([]byte(s.mark), v...))
+			byteData, err := s.aesGCM.AesGcmEncrypt(append(s.mark, v...))
 			if err != nil {
 				return nil, err
 			}
 			_, err = s.dataSocket.Write(byteData)
 			if err != nil {
-				return nil, err
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
+					return nil, err
+				} else {
+					return nil, err
+				}
 			}
 			return nil, nil
 		} else {
 			if len(v) > 4088 {
-				panic("sendNoTimeDict: 指令发送时大于1016个字节")
-			} else if len(v) < 40 {
+				panic("sendNoTimeDict: 指令发送时大于4088个字节")
+			} else if len(v) <= 8 {
 				panic("sendNoTimeDict: 指令发送时无字节")
 			}
-			byteData := append(append([]byte(s.mark), v...))
+			byteData := append(s.mark, v...)
 			_, err := s.dataSocket.Write(byteData)
 			if err != nil {
-				return nil, err
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
+					return nil, err
+				} else {
+					return nil, err
+				}
 			}
 			return nil, nil
 		}
@@ -143,51 +156,44 @@ func (s *Session) Send(data any, output bool) (result map[string]any, err error)
 	}
 }
 
-//func process(conn net.Conn) {
-//	defer conn.Close()
-//	reader := bufio.NewReader(conn)
-//	var buf [4096]byte
-//	for {
-//		n, err := reader.Read(buf[:])
-//		if err != nil {
-//			fmt.Printf("read from conn failed, err:%v\n", err)
-//			break
-//		}
-//		fmt.Printf("收到的数据：%v\n", string(buf[:n]))
-//	}
-//}
-
 func (s *Session) sendNoTimeDict(conn net.Conn, data any, output bool) (map[string]any, error) {
-
 	switch v := data.(type) {
 	case []byte:
 		if s.aesGCM != nil {
-			if len(v) > 4056 {
-				panic("sendNoTimeDict: 指令发送时大于1008个字节")
-			} else if len(v) < 40 {
+			if len(v) > 4060 {
+				panic("sendNoTimeDict: 指令发送时大于4060个字节")
+			} else if len(v) < 36 {
 				panic("sendNoTimeDict: 指令发送时无字节")
 			}
-			v, err := s.aesGCM.AesGcmEncrypt(append([]byte(s.mark), v...))
+			v, err := s.aesGCM.AesGcmEncrypt(append(s.mark, v...))
 			if err != nil {
 				return nil, err
 			}
 			// 发送数据
 			_, err = conn.Write(v)
 			if err != nil {
-				//netErr.Timeout()
-				return nil, err
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
+					return nil, err
+				} else {
+					return nil, err
+				}
 			}
 		} else {
 			if len(v) > 4088 {
-				panic("sendNoTimeDict: 指令发送时大于1016个字节")
-			} else if len(v) < 40 {
+				panic("sendNoTimeDict: 指令发送时大于4088个字节")
+			} else if len(v) <= 8 {
 				panic("sendNoTimeDict: 指令发送时无字节")
 			}
 			// 发送数据
 			_, err := conn.Write(v)
 			if err != nil {
-				//netErr.Timeout()
-				return nil, err
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
+					return nil, err
+				} else {
+					return nil, err
+				}
 			}
 		}
 
@@ -196,7 +202,11 @@ func (s *Session) sendNoTimeDict(conn net.Conn, data any, output bool) (map[stri
 			buf := make([]byte, 4096)
 			n, err := conn.Read(buf)
 			if err != nil {
-				return nil, err
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					logrus.Warningf("Received %s data timeout", s.dataSocket.RemoteAddr().String())
+				} else {
+					return nil, err
+				}
 			}
 			var result []byte
 			if s.aesGCM != nil {
@@ -216,15 +226,15 @@ func (s *Session) sendNoTimeDict(conn net.Conn, data any, output bool) (map[stri
 
 	case map[string]any:
 		if s.aesGCM != nil {
-			if len(v) > 4056 {
-				panic("sendNoTimeDict: 指令发送时大于1008个字节")
-			} else if len(v) < 40 {
+			if len(v) > 4060 {
+				panic("sendNoTimeDict: 指令发送时大于4060个字节")
+			} else if len(v) < 36 {
 				panic("sendNoTimeDict: 指令发送时无字节")
 			}
 		} else {
 			if len(v) > 4088 {
-				panic("sendNoTimeDict: 指令发送时大于1016个字节")
-			} else if len(v) < 40 {
+				panic("sendNoTimeDict: 指令发送时大于4088个字节")
+			} else if len(v) <= 8 {
 				panic("sendNoTimeDict: 指令发送时无字节")
 			}
 		}
@@ -234,17 +244,25 @@ func (s *Session) sendNoTimeDict(conn net.Conn, data any, output bool) (map[stri
 			return nil, err
 		}
 
-		_, err = conn.Write(commandJson)
+		_, err = conn.Write(append(s.mark, commandJson...))
 		if err != nil {
-			//netErr.Timeout()
-			return nil, err
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
+				return nil, err
+			} else {
+				return nil, err
+			}
 		}
 
 		if output {
 			buf := make([]byte, 4096)
 			n, err := conn.Read(buf)
 			if err != nil {
-				return nil, err
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					logrus.Warningf("Received %s data timeout", s.dataSocket.RemoteAddr().String())
+				} else {
+					return nil, err
+				}
 			}
 			var decodeData map[string]any
 			err = json.Unmarshal(buf[:n], &decodeData)
@@ -270,19 +288,19 @@ func (s *Session) sendNoTimeDict(conn net.Conn, data any, output bool) (map[stri
 //	command: 设置发送的指令, 如果为字典类型则转换为json发送。
 //	return: 如果Output=True在发送数据后等待对方返回一条数据; 否则仅发送
 func (s *Session) sendTimeDict(conn net.Conn, command map[string]interface{}, output bool) (map[string]interface{}, error) {
-	s.timeDict.CreateRecv(s.mark)
+	s.timeDict.CreateRecv(string(s.mark))
 	commandJson, err := json.Marshal(command)
 	if err != nil {
 		return nil, err
 	}
 
 	if s.aesGCM != nil {
-		if len(commandJson) > 4056 {
+		if len(commandJson) > 4060 {
 			panic("sendNoTimeDict: 指令发送时大于1008个字节")
-		} else if len(commandJson) < 40 {
+		} else if len(commandJson) < 36 {
 			panic("sendNoTimeDict: 指令发送时无字节")
 		}
-		commandJson, err = s.aesGCM.AesGcmEncrypt(append([]byte(s.mark), commandJson...))
+		commandJson, err = s.aesGCM.AesGcmEncrypt(append(s.mark, commandJson...))
 		if err != nil {
 			return nil, err
 		}
@@ -290,20 +308,25 @@ func (s *Session) sendTimeDict(conn net.Conn, command map[string]interface{}, ou
 	} else {
 		if len(commandJson) > 4088 {
 			panic("sendNoTimeDict: 指令发送时大于1016个字节")
-		} else if len(commandJson) < 40 {
+		} else if len(commandJson) <= 8 {
 			panic("sendNoTimeDict: 指令发送时无字节")
 		}
 	}
-	_, err = conn.Write(append([]byte(s.mark), commandJson...))
+	_, err = conn.Write(append(s.mark, commandJson...))
 	if err != nil {
-		return nil, err
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
+			return nil, err
+		} else {
+			return nil, err
+		}
 	}
 
 	var decodeData map[string]interface{}
 	if output {
-		data, ok := s.timeDict.Get(s.mark)
+		data, ok := s.timeDict.Get(string(s.mark))
 		if ok {
-			err := json.Unmarshal(data, &decodeData)
+			err = json.Unmarshal(data, &decodeData)
 			if err != nil {
 				return nil, err
 			}
@@ -312,3 +335,19 @@ func (s *Session) sendTimeDict(conn net.Conn, command map[string]interface{}, ou
 	}
 	return nil, nil
 }
+
+//func (s *Session) isEncrypt(data []byte) {
+//	if s.aesGCM != nil {
+//		if len(v) > 4060 {
+//			panic("sendNoTimeDict: 指令发送时大于4060个字节")
+//		} else if len(v) < 36 {
+//			panic("sendNoTimeDict: 指令发送时无字节")
+//		}
+//	} else {
+//		if len(v) > 4088 {
+//			panic("sendNoTimeDict: 指令发送时大于4088个字节")
+//		} else if len(v) <= 8 {
+//			panic("sendNoTimeDict: 指令发送时无字节")
+//		}
+//	}
+//}

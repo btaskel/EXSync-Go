@@ -1,18 +1,20 @@
 package encryption
 
 import (
+	"EXSync/core/internal/modules/hashext"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 )
 
 const dataLength = 4096 // 加密后允许的最大长度
 
 func NewGCM(key string) (*Gcm, error) {
-	block, err_ := aes.NewCipher([]byte(key))
+	block, err_ := aes.NewCipher([]byte(hashext.GetSha256(key)[:16]))
 	if err_ != nil {
 		return nil, err_
 	}
@@ -28,21 +30,22 @@ type Gcm struct {
 	aesGCM cipher.AEAD
 }
 
-// AesGcmEncrypt 使用aes-ctr加密并转换为base64
+// AesGcmEncrypt 使用aes-ctr加密一个byte数组
 func (g *Gcm) AesGcmEncrypt(data []byte) (res []byte, err error) {
 	if len(data)-40 > dataLength {
 		return nil, errors.New("lengthError")
 	} else {
-		nonce := make([]byte, g.aesGCM.NonceSize())
+		nonce := make([]byte, g.aesGCM.NonceSize()) // nonce size: 12, tag size: 16
 		if _, err_ := io.ReadFull(rand.Reader, nonce); err_ != nil {
 			return nil, err_
 		}
+		fmt.Println("Nonce", len(nonce))
 		ciphertext := g.aesGCM.Seal(nil, nonce, data, nil)
-		return ciphertext, nil
+		return append(nonce, ciphertext...), nil
 	}
 }
 
-// AesGcmDecrypt 解密一个使用aes-ctr base64转码的字符串
+// AesGcmDecrypt 解密使用aes-ctr加密的byte数组
 func (g *Gcm) AesGcmDecrypt(data []byte) ([]byte, error) {
 	nonceSize := g.aesGCM.NonceSize()
 	if len(data) < nonceSize {
@@ -72,6 +75,31 @@ func (g *Gcm) B64GCMDecrypt(data string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	result, err := g.AesGcmDecrypt(ciphertext)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
 
-	return g.AesGcmDecrypt(ciphertext)
+// StrB64GCMEncrypt 使用aes-ctr加密并转换为base64
+func (g *Gcm) StrB64GCMEncrypt(data string) (string, error) {
+	ciphertext, err := g.AesGcmEncrypt([]byte(data))
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(ciphertext), nil
+}
+
+// StrB64GCMDecrypt 解密一个使用aes-ctr base64转码的字符串
+func (g *Gcm) StrB64GCMDecrypt(data string) (string, error) {
+	ciphertext, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		return "", err
+	}
+	result, err := g.AesGcmDecrypt(ciphertext)
+	if err != nil {
+		return "", err
+	}
+	return string(result), nil
 }

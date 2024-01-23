@@ -11,8 +11,6 @@ import (
 	"strings"
 )
 
-const configPath = ".\\data\\config"
-
 var Config = initConfig()
 
 // initConfig 启动时进行初始化读取

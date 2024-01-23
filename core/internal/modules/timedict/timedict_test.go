@@ -14,9 +14,8 @@ import (
 func TestNewTimeDict(t *testing.T) {
 	timedict := NewTimeDict()
 	timedict.Set("abc", []byte{5})
-	get, err := timedict.Get("abc")
-	if err != nil {
-		return
+	get, ok := timedict.Get("abc")
+	if ok {
+		fmt.Println(get)
 	}
-	fmt.Println(get)
 }

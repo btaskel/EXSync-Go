@@ -4,15 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"runtime"
 	"strings"
 )
 
 var IphalfStr []string
 
 func ScanDevices() ([]string, error) {
-	runtime.GOMAXPROCS(4)
-	err := Getlocaladdr()
+	err := getLocalAddr()
 	if err != nil {
 		return nil, err
 	}
@@ -23,15 +21,7 @@ func ScanDevices() ([]string, error) {
 	return onlineHosts, nil
 }
 
-//func loginit() {
-//	logFile, err := os.Create("log.txt")
-//	if err != nil {
-//		log.Fatalln("open file error !")
-//	}
-//	debugLog = log.New(logFile, "[Debug]", log.Llongfile)
-//}
-
-func Getlocaladdr() error {
+func getLocalAddr() error {
 	addrs, err := net.InterfaceAddrs()
 
 	if err != nil {

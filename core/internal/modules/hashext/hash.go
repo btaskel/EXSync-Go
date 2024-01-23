@@ -13,6 +13,7 @@ import (
 
 const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
+// GetRandomStr 获取随机字符串
 func GetRandomStr(length int) string {
 	b := make([]byte, length)
 	for i := range b {
@@ -53,9 +54,12 @@ func getXXHash(path string) (fileHash string, err error) {
 	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }
 
+// GetSha256 获取一个字符串的sha256
 func GetSha256(str string) string {
 	return fmt.Sprintf("%X", sha256.Sum256([]byte(str)))
 }
+
+// GetSha384 获取一个字符串的sha256
 func GetSha384(str string) string {
 	return fmt.Sprintf("%X", sha512.Sum384([]byte(str)))
 }
