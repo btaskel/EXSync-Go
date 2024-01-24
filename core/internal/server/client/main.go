@@ -1,6 +1,11 @@
 package client
 
 import (
+	"EXSync/core/internal/config"
+	"EXSync/core/internal/modules/encryption"
+	"EXSync/core/internal/modules/hashext"
+	"EXSync/core/internal/modules/socket"
+	"EXSync/core/internal/modules/timechannel"
 	"encoding/json"
 	"errors"
 	"github.com/sirupsen/logrus"
@@ -10,12 +15,24 @@ import (
 )
 
 type Client struct {
-	CommandSocket     net.Conn
-	DataSocket        net.Conn
-	CommandSocketPort int
-	DataSocketPort    int
-	HostInfo          map[string]string
-	IP                string
+	AesGCM        *encryption.Gcm
+	CommandSocket net.Conn
+	TimeChannel   timechannel.TimeChannel
+	ClientMark    string
+	DataSocket    net.Conn
+	IP            string
+	Id            string
+}
+
+func NewClient(commandSocket, dataSocket net.Conn, ip, clientMark, id string, AesGCM *encryption.Gcm) *Client {
+	return &Client{
+		AesGCM:        AesGCM,
+		ClientMark:    clientMark,
+		CommandSocket: commandSocket,
+		DataSocket:    dataSocket,
+		IP:            ip,
+		Id:            id,
+	}
 }
 
 func (c *Client) setProxy() {
@@ -29,7 +46,20 @@ func (c *Client) initSocket() (error error) {
 
 func (c *Client) connectRemoteCommandSocket() (error error) {
 	connectVerify := func(debugStatus bool) bool {
-
+		session := socket.NewSession()
+		// 4.本地发送sha384:发送本地密码sha384
+		passwordSha384 := hashext.GetSha384(config.Config.Server.Addr.Password)
+		base64EncryptLocalID, err := c.AesGCM.StrB64GCMEncrypt(c.Id)
+		if err != nil {
+			return false
+		}
+		command := map[string]map[string]string{
+			"data": {
+				"password_hash": passwordSha384,
+				"id":            base64EncryptLocalID,
+			},
+		}
+		result :=
 	}
 	connectVerifyNoPassword := func(publicKey string, output bool) bool {
 

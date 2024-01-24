@@ -12,3 +12,12 @@ type Command struct {
 	Method  string         `json:"method"`
 	Data    map[string]any `json:"data"`
 }
+
+type Reply struct {
+	Data map[string]any `json:"data"`
+}
+
+type Commander interface {
+	Command
+	map[string]any
+}

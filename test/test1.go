@@ -348,22 +348,70 @@ func main() {
 	//	fmt.Printf(k)
 	//}
 	//fmt.Println(runtime.NumCPU())
-	type Server struct {
-		mergeSocket map[string]map[string]bool
-		flag        bool
-	}
-	server := Server{mergeSocket: map[string]map[string]bool{}}
-	server.mergeSocket["123"] = map[string]bool{
-		"a": true,
-	}
-	server.mergeSocket["123"] = map[string]bool{
-		"a": false,
-		"b": true,
-	}
-	k, ok := server.mergeSocket["test"]["abce"]
+	//type Server struct {
+	//	mergeSocket map[string]map[string]bool
+	//	flag        bool
+	//}
+	//server := Server{mergeSocket: map[string]map[string]bool{}}
+	//server.mergeSocket["123"] = map[string]bool{
+	//	"a": true,
+	//}
+	//server.mergeSocket["123"] = map[string]bool{
+	//	"a": false,
+	//	"b": true,
+	//}
+	//k, ok := server.mergeSocket["test"]["abce"]
+	//
+	//fmt.Println(k, ok)
+	//fmt.Println(server.mergeSocket["123"])
+	//fmt.Println(server.mergeSocket)
+	//fmt.Println(server.flag)
+	//t := []byte{2, 3, 5}
+	//fmt.Println(t)
 
-	fmt.Println(k, ok)
-	fmt.Println(server.mergeSocket["123"])
-	fmt.Println(server.mergeSocket)
-	fmt.Println(server.flag)
+	//dc := map[string]any{
+	//	"a": "b",
+	//	"b": "c",
+	//}
+	//fmt.Println(len(dc))
+	//comm := Command{
+	//	Command: "a",
+	//	Type:    "s",
+	//	Method:  "5",
+	//	Data: map[string]interface{}{
+	//		"abc": 555,
+	//	},
+	//}
+	comm2 := Reply{Data: map[string]interface{}{
+		"sss": 125,
+	}}
+	YourFunction(comm2)
+}
+
+type Command struct {
+	Command string                 `json:"command"`
+	Type    string                 `json:"type"`
+	Method  string                 `json:"method"`
+	Data    map[string]interface{} `json:"data"`
+}
+
+func (c Command) GetData() map[string]interface{} {
+	return c.Data
+}
+
+type Reply struct {
+	Data map[string]interface{} `json:"data"`
+}
+
+func (r Reply) GetData() map[string]interface{} {
+	return r.Data
+}
+
+type DataHolder interface {
+	GetData() map[string]interface{}
+}
+
+func YourFunction(data DataHolder) {
+	// Your implementation here
+	fmt.Println(data.GetData())
 }

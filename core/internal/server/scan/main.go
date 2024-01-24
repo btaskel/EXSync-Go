@@ -116,15 +116,23 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 			fmt.Print(err)
 		}
 	}(conn)
-	version := config.Config.Version
-	command := option.Command{
-		Command: "comm",
-		Type:    "verifyConnect",
-		Method:  "post",
-		Data: map[string]any{
-			"version": version,
+	//command := option.Command{
+	//	Command: "comm",
+	//	Type:    "verifyConnect",
+	//	Method:  "post",
+	//	Data: map[string]any{
+	//		"version": version,
+	//	},
+
+	command := map[string]any{
+		"command": "comm",
+		"type":    "verifyConnect",
+		"method":  "post",
+		"data": map[string]float64{
+			"version": config.Config.Version,
 		},
 	}
+
 	gcm, err := encryption.NewGCM(config.Config.Server.Addr.Password)
 	if err != nil {
 		return
@@ -137,7 +145,7 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 			return
 		}
 		// 3.远程发送sha256值:验证远程sha256值是否与本地匹配
-		result, err := session.Send(command, true)
+		result, err := session.SendCommand(command, true, true)
 		if err != nil {
 			logrus.Debugf("scan : An error occurred while verifying whether the remote sha256 value matches the local value, from %s", ip)
 			return
@@ -154,13 +162,19 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 				logrus.Debugf("An error occurred while encrypting the local ID using base64 + AES-CTR, when sending to %s", ip)
 				return
 			}
-			replyCommand := map[string]map[string]string{
-				"data": {
+			//replyCommand := map[string]map[string]string{
+			//	"data": {
+			//		"password_hash": localPasswordSha384,
+			//		"id":            base64EncryptLocalID,
+			//	},
+			//}
+			replyCommand := map[string]any{
+				"data": map[string]string{
 					"password_hash": localPasswordSha384,
 					"id":            base64EncryptLocalID,
 				},
 			}
-			result, err = session.Send(replyCommand, true)
+			result, err = session.SendCommand(replyCommand, true, true)
 			if err != nil {
 				logrus.Debugf("")
 				return
@@ -237,7 +251,7 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 					"id":               sessionIDEncryptBase64,
 				},
 			}
-			result, err = session.Send(replyCommand, true)
+			result, err = session.SendCommand(replyCommand, true, true)
 			if err != nil {
 				logrus.Debugf("A timeout error occurred while sending encrypted session keys to host %s!", ip)
 				return
