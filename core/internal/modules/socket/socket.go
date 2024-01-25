@@ -3,6 +3,7 @@ package socket
 import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
+	"EXSync/core/option"
 	"encoding/json"
 	"errors"
 	"github.com/sirupsen/logrus"
@@ -67,7 +68,7 @@ func NewSession(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket 
 	}, nil
 }
 
-func (s *Session) SendCommand(data map[string]any, output, encrypt bool) (result map[string]any, err error) {
+func (s *Session) SendCommand(data option.Command, output, encrypt bool) (result map[string]any, err error) {
 	commandJson, err := json.Marshal(data)
 	if err != nil {
 		return nil, err

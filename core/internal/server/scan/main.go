@@ -116,23 +116,14 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 			fmt.Print(err)
 		}
 	}(conn)
-	//command := option.Command{
-	//	Command: "comm",
-	//	Type:    "verifyConnect",
-	//	Method:  "post",
-	//	Data: map[string]any{
-	//		"version": version,
-	//	},
-
-	command := map[string]any{
-		"command": "comm",
-		"type":    "verifyConnect",
-		"method":  "post",
-		"data": map[string]float64{
+	command := option.Command{
+		Command: "comm",
+		Type:    "verifyConnect",
+		Method:  "post",
+		Data: map[string]any{
 			"version": config.Config.Version,
 		},
 	}
-
 	gcm, err := encryption.NewGCM(config.Config.Server.Addr.Password)
 	if err != nil {
 		return
@@ -168,8 +159,11 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 			//		"id":            base64EncryptLocalID,
 			//	},
 			//}
-			replyCommand := map[string]any{
-				"data": map[string]string{
+			replyCommand := option.Command{
+				Command: "",
+				Type:    "",
+				Method:  "",
+				Data: map[string]any{
 					"password_hash": localPasswordSha384,
 					"id":            base64EncryptLocalID,
 				},
@@ -216,7 +210,8 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 			//e := strconv.Itoa(publicKey.E)
 			// 明文^E%N = 密文
 			// 密文^D%N = 明文
-			publicKeyBytes := []byte(publicKey) // 将公钥字符串解码为字节切片
+			// 将公钥字符串解码为字节切片
+			publicKeyBytes := []byte(publicKey)
 			publicKeyBlock, _ := pem.Decode(publicKeyBytes)
 			if publicKeyBlock == nil {
 				logrus.Debug("scan: failed to decode PEM block containing public key!")
@@ -245,8 +240,11 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 			if err != nil {
 				return
 			}
-			replyCommand := map[string]any{
-				"data": map[string]string{
+			replyCommand := option.Command{
+				Command: "",
+				Type:    "",
+				Method:  "",
+				Data: map[string]any{
 					"session_password": sessionPasswordEncryptBase64,
 					"id":               sessionIDEncryptBase64,
 				},

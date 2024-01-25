@@ -382,10 +382,26 @@ func main() {
 	//		"abc": 555,
 	//	},
 	//}
-	comm2 := Reply{Data: map[string]interface{}{
-		"sss": 125,
-	}}
-	YourFunction(comm2)
+	//comm2 := Reply{Data: map[string]interface{}{
+	//	"sss": 125,
+	//}}
+	//YourFunction(comm2)
+	s := map[string]any{
+		"data": map[string]string{
+			"a": "sss",
+		},
+	}
+	commandJson, err := json.Marshal(s)
+	if err != nil {
+		return
+	}
+	var d map[string]any
+	err = json.Unmarshal(commandJson, &d)
+	if err != nil {
+		return
+	}
+	m, ok := d["datas"].(map[string]any)
+	fmt.Println(ok, m)
 }
 
 type Command struct {
