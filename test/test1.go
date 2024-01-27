@@ -412,35 +412,60 @@ func main() {
 	//p := &h
 	//fmt.Println(&p)
 	//fmt.Println(p.Age)
-	t := test("Bt", 15, true)
-	//println(t.Name)
-	p := Person{H: t}
-	p.pr()
-	fmt.Println(p.H.Age)
-	fmt.Println(t.Age)
-}
-func test(name string, age int, gender bool) human {
-	h := human{
-		Name:   name,
-		Age:    age,
-		Gender: gender,
+	//t := test("Bt", 15, true)
+	////println(t.Name)
+	//p := Person{H: t}
+	//p.pr()
+	//fmt.Println(p.H.Age)
+	//fmt.Println(t.Age)
+	//a := 1
+	//b := a
+	//fmt.Println(a)
+	//fmt.Println(b)
+	//type Inner struct {
+	//	Field int
+	//}
+	//
+	//type Outer struct {
+	//	Inner
+	//}
+	//
+	//o := Outer{
+	//	InnerStruct: Inner{
+	//		Field: 42,
+	//	},
+	//}
+	//fmt.Println(o.InnerStruct.Field) // 输出：42
+	dc := map[string]string{
+		"a": "A",
 	}
-	return h
+	value, ok := dc["a"]
+	fmt.Println(ok)
+	fmt.Println(value)
 }
 
-type human struct {
-	Name   string
-	Age    int
-	Gender bool
-}
-
-type Person struct {
-	H human
-}
-
-func (p *Person) pr() {
-	p.H.Age = 50
-}
+//func test(name string, age int, gender bool) human {
+//	h := human{
+//		Name:   name,
+//		Age:    age,
+//		Gender: gender,
+//	}
+//	return h
+//}
+//
+//type human struct {
+//	Name   string
+//	Age    int
+//	Gender bool
+//}
+//
+//type Person struct {
+//	H human
+//}
+//
+//func (p *Person) pr() {
+//	p.H.Age = 50
+//}
 
 //
 //// Run 批量接受指定接口范围内的对象，并对对象本身方法进行处理

@@ -57,6 +57,13 @@ func NewSession(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket 
 		}
 	}
 
+	if timeChannel != nil {
+		err = timeChannel.CreateRecv(mark)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &Session{
 		timeChannel:    timeChannel,
 		dataSocket:     dataSocket,
@@ -86,9 +93,14 @@ func (s *Session) SendCommand(data option.Command, output, encrypt bool) (result
 			panic("sendNoTimeDict: 指令发送时无字节")
 		}
 	}
-	encryptData, err := s.aesGCM.AesGcmEncrypt(append(s.mark, commandJson...))
-	if err != nil {
-		return nil, err
+	var preparedData []byte
+	if s.aesGCM != nil {
+		preparedData, err = s.aesGCM.AesGcmEncrypt(append(s.mark, commandJson...))
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		preparedData = append(s.mark, commandJson...)
 	}
 
 	switch s.method {
@@ -99,11 +111,11 @@ func (s *Session) SendCommand(data option.Command, output, encrypt bool) (result
 		} else {
 			conn = s.dataSocket
 		}
-		return s.sendTimeDict(conn, encryptData, output)
+		return s.sendTimeDict(conn, preparedData, output)
 	case 1:
-		return s.sendTimeDict(s.dataSocket, encryptData, output)
+		return s.sendTimeDict(s.dataSocket, preparedData, output)
 	case 2:
-		return s.sendNoTimeDict(s.commandSocket, encryptData, output)
+		return s.sendNoTimeDict(s.commandSocket, preparedData, output)
 	default:
 		panic("错误的Session发送方法")
 	}
@@ -261,11 +273,7 @@ func (s *Session) sendNoTimeDict(conn net.Conn, data []byte, output bool) (map[s
 //	command: 设置发送的指令, 如果为字典类型则转换为json发送。
 //	return: 如果Output=True在发送数据后等待对方返回一条数据; 否则仅发送
 func (s *Session) sendTimeDict(conn net.Conn, command []byte, output bool) (map[string]any, error) {
-	err := s.timeChannel.CreateRecv(string(s.mark))
-	if err != nil {
-		return nil, err
-	}
-	_, err = conn.Write(command)
+	_, err := conn.Write(command)
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())

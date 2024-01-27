@@ -87,7 +87,6 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 	//session, err := socket.NewSession(c.TimeChannel, c.DataSocket, c.CommandSocket, sessionMark, "")
 
 	connectVerify := func() bool {
-
 		// 4.本地发送sha384:发送本地密码sha384
 		passwordSha384 := hashext.GetSha384(config.Config.Server.Addr.Password)
 		base64EncryptLocalID, err := c.AesGCM.B64GCMEncrypt([]byte(c.ID))
@@ -235,6 +234,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 		return true
 		//c.CommandSocket = conn
 	}
+
 	check := func() bool {
 		for i := 0; i < 3; i++ {
 			// 1.本地发送验证指令:发送指令开始进行验证
@@ -276,10 +276,10 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 		logrus.Debugf("check: Verification failed with host X")
 		return false
 	}
-	if c.AesGCM != nil {
-		return direct()
-	} else {
+	if c.AesGCM == nil {
 		return check()
+	} else {
+		return direct()
 	}
 
 }

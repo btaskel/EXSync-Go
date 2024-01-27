@@ -4,9 +4,11 @@ import (
 	"EXSync/core/internal/config"
 	"EXSync/core/internal/exsync/client"
 	"EXSync/core/internal/exsync/server/commands"
+	"EXSync/core/internal/exsync/server/commands/base"
 	"EXSync/core/internal/exsync/server/scan"
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/timechannel"
+	"EXSync/core/option"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"net"
@@ -14,13 +16,13 @@ import (
 	"time"
 )
 
-//var socketManage map[string]any
-
 type Server struct {
 	scan.Scan
+	ConnectManage      map[string]option.ConnectManage
 	StopNewConnections bool
 	mergeSocketDict    map[string]map[string]net.Conn
 	timeChannel        *timechannel.TimeChannel
+	commandSet         *base.CommandSet
 }
 
 func NewServer() *Server {
@@ -148,10 +150,20 @@ func (s *Server) verifyDataSocket(dataSocket net.Conn) {
 	}
 }
 
+// 主动创建客户端连接对方
+// 如果已经预验证，那么直接连接即可通过验证
 func (s *Server) initClient(ip string) {
 	//verifyInfo := s.VerifyManage[ip]
 	//aesKey := verifyInfo.AesKey
 	//remoteID := verifyInfo.RemoteID
 	clientMark := hashext.GetRandomStr(8)
-	client.NewClient(clientMark, ip, s.timeChannel)
+	c, ok := client.NewClient(clientMark, ip, s.timeChannel)
+	if ok {
+		s.ConnectManage[ip] = option.ConnectManage{
+			ID:         c.ID,
+			ClientMark: c.ClientMark,
+			Client:     c,
+		}
+	}
+
 }

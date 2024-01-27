@@ -1,6 +1,6 @@
 package ext
 
-import "EXSync/core/internal/server/client/commands/base"
+import "EXSync/core/internal/exsync/client/commands/base"
 
 type CommandSet struct {
 	base.CommandSet

@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"EXSync/core/internal/exsync/server/commands/base"
+	"EXSync/core/internal/exsync/server/commands/ext"
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
 	"github.com/sirupsen/logrus"
@@ -12,6 +14,7 @@ type CommandProcess struct {
 	TimeChannel   *timechannel.TimeChannel
 	DataSocket    net.Conn
 	CommandSocket net.Conn
+	IP            string
 	close         bool
 }
 
@@ -45,7 +48,14 @@ func NewCommandProcess(key string, dataSocket, commandSocket net.Conn, timeChann
 //	    }
 //	}
 func (c *CommandProcess) recvCommand() {
-	buf := make([]byte, 4096)
+	set := ext.CommandSet{Base: base.CommandSet{
+		AesGCM:        c.AesGCM,
+		Ip:            c.IP,
+		TimeChannel:   c.TimeChannel,
+		DataSocket:    c.DataSocket,
+		CommandSocket: c.CommandSocket,
+	}}
+	buf := make([]byte, 4096) // 数据接收切片
 	for {
 		if c.close {
 			return
