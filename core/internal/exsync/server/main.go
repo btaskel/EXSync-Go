@@ -2,10 +2,11 @@ package server
 
 import (
 	"EXSync/core/internal/config"
+	"EXSync/core/internal/exsync/client"
+	"EXSync/core/internal/exsync/server/commands"
+	"EXSync/core/internal/exsync/server/scan"
 	"EXSync/core/internal/modules/hashext"
-	"EXSync/core/internal/server/client"
-	"EXSync/core/internal/server/commands"
-	"EXSync/core/internal/server/scan"
+	"EXSync/core/internal/modules/timechannel"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"net"
@@ -19,6 +20,7 @@ type Server struct {
 	scan.Scan
 	StopNewConnections bool
 	mergeSocketDict    map[string]map[string]net.Conn
+	timeChannel        *timechannel.TimeChannel
 }
 
 func NewServer() *Server {
@@ -28,6 +30,7 @@ func NewServer() *Server {
 	// 创建服务实例
 	server := Server{
 		mergeSocketDict: map[string]map[string]net.Conn{},
+		timeChannel:     timechannel.NewTimeChannel(),
 	}
 
 	// 创建局域网扫描验证服务
@@ -105,7 +108,7 @@ func (s *Server) verifyCommandSocket(commandSocket net.Conn) {
 	if hostInfo, ok := s.VerifyManage[host]; ok && hostInfo.AesKey != "" {
 		// todo: 验证通过处理
 		if dataSocket, ok := s.mergeSocketDict[host]["command"]; ok {
-			go commands.NewCommandProcess(s.VerifyManage[host].AesKey, dataSocket, commandSocket)
+			go commands.NewCommandProcess(s.VerifyManage[host].AesKey, dataSocket, commandSocket, s.timeChannel)
 			delete(s.mergeSocketDict, host)
 		} else {
 			s.mergeSocketDict[host] = map[string]net.Conn{
@@ -133,7 +136,7 @@ func (s *Server) verifyDataSocket(dataSocket net.Conn) {
 	if hostInfo, ok := s.VerifyManage[host]; ok && hostInfo.AesKey != "" {
 		// todo: 验证通过处理
 		if commandSocket, ok := s.mergeSocketDict[host]["command"]; ok {
-			go commands.NewCommandProcess(s.VerifyManage[host].AesKey, dataSocket, commandSocket)
+			go commands.NewCommandProcess(s.VerifyManage[host].AesKey, dataSocket, commandSocket, s.timeChannel)
 			delete(s.mergeSocketDict, host)
 		} else {
 			s.mergeSocketDict[host] = map[string]net.Conn{
@@ -146,16 +149,9 @@ func (s *Server) verifyDataSocket(dataSocket net.Conn) {
 }
 
 func (s *Server) initClient(ip string) {
+	//verifyInfo := s.VerifyManage[ip]
+	//aesKey := verifyInfo.AesKey
+	//remoteID := verifyInfo.RemoteID
 	clientMark := hashext.GetRandomStr(8)
-	verifyInfo := s.VerifyManage[ip]
-	aesKey := verifyInfo.AesKey
-	remoteID := verifyInfo.RemoteID
-	client := client.Client{
-		CommandSocket:     nil,
-		DataSocket:        nil,
-		CommandSocketPort: 0,
-		DataSocketPort:    0,
-		HostInfo:          nil,
-		IP:                "",
-	}
+	client.NewClient(clientMark, ip, s.timeChannel)
 }

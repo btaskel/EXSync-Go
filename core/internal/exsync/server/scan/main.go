@@ -2,10 +2,11 @@ package scan
 
 import (
 	"EXSync/core/internal/config"
+	"EXSync/core/internal/exsync/server/scan/lan"
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/socket"
-	"EXSync/core/internal/server/scan/lan"
+	"EXSync/core/internal/proxy"
 	"EXSync/core/option"
 	"crypto/rsa"
 	"crypto/x509"
@@ -101,8 +102,14 @@ func (s *Scan) checkDevices(ipSet map[string]struct{}) {
 func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 	defer wait.Done()
 	// 连接指定端口
-	address := fmt.Sprintf("%s:%d", ip, config.Config.Server.Addr.Port+1)
-	conn, err := net.DialTimeout("tcp", address, time.Duration(4)*time.Second)
+	addr := fmt.Sprintf("%s:%d", ip, config.Config.Server.Addr.Port+1)
+	var err error
+	var conn net.Conn
+	if config.Config.Server.Proxy.Enabled {
+		conn, err = proxy.Socks5.Dial("tcp", addr)
+	} else {
+		conn, err = net.DialTimeout("tcp", addr, 5*time.Second)
+	}
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		err = conn.Close()
 		if err != nil {

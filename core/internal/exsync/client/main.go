@@ -2,48 +2,84 @@ package client
 
 import (
 	"EXSync/core/internal/config"
+	"EXSync/core/internal/exsync/client/commands/ext"
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/socket"
 	"EXSync/core/internal/modules/timechannel"
+	"EXSync/core/internal/proxy"
 	"EXSync/core/option"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"github.com/sirupsen/logrus"
 	"net"
 	"time"
 )
 
+// Client
+// ClientMark 当前客户端实例的标识
+// ID 连接对方时表示本机是同一用户的标识
+// RemoteID 连接对方时对方表示自己是同一用户的表示
+// IP 对方ip地址
 type Client struct {
-	AesGCM        *encryption.Gcm
-	CommandSocket net.Conn
-	TimeChannel   *timechannel.TimeChannel
-	ClientMark    string
-	DataSocket    net.Conn
-	IP            string
-	Id            string
-	RemoteID      string
+	ext.CommandSet
+	AesGCM                       *encryption.Gcm
+	TimeChannel                  *timechannel.TimeChannel
+	ClientMark, IP, ID, RemoteID string
+	commandSocket, dataSocket    net.Conn
 }
 
-func NewClient(commandSocket, dataSocket net.Conn, ip, clientMark, id string, AesGCM *encryption.Gcm) *Client {
-	return &Client{
-		AesGCM:        AesGCM,
-		ClientMark:    clientMark,
-		CommandSocket: commandSocket,
-		DataSocket:    dataSocket,
-		IP:            ip,
-		Id:            id,
+func NewClient(clientMark, ip string, timeChannel *timechannel.TimeChannel) (client Client, ok bool) {
+	gcm, err := encryption.NewGCM(config.Config.Server.Addr.Password)
+	if err != nil {
+		logrus.Errorf("NewClient: Failed to create AES-GCM! %s", ip)
+		return Client{}, false
 	}
+
+	client = Client{
+		ClientMark:  clientMark,
+		IP:          ip,
+		ID:          config.Config.Server.Addr.ID,
+		AesGCM:      gcm,
+		TimeChannel: timeChannel,
+	}
+	err = client.initSocket()
+	if err != nil {
+		logrus.Errorf("NewClient: Failed to initialize socket! %s", ip)
+		return Client{}, false
+	}
+	ok = client.connectRemoteCommandSocket()
+	if ok {
+		return client, true
+	}
+	logrus.Warningf("NewClient: Verification of connection identity with %s failed", ip)
+	return Client{}, false
 }
 
-func (c *Client) setProxy() {
-	return
-}
-
-func (c *Client) initSocket() (error error) {
-
-	return
+func (c *Client) initSocket() (err error) {
+	addr := fmt.Sprintf("%s:%d", c.IP, config.Config.Server.Addr.Port+1)
+	if config.Config.Server.Proxy.Enabled {
+		c.commandSocket, err = proxy.Socks5.Dial("tcp", addr)
+	} else {
+		c.commandSocket, err = net.DialTimeout("tcp", addr, 4*time.Second)
+	}
+	if err != nil {
+		logrus.Warningf("Client initSocket: Connection to host %s timeout!", c.IP)
+		return err
+	}
+	addr = fmt.Sprintf("%s:%d", c.IP, config.Config.Server.Addr.Port)
+	if config.Config.Server.Proxy.Enabled {
+		c.dataSocket, err = proxy.Socks5.Dial("tcp", addr)
+	} else {
+		c.dataSocket, err = net.DialTimeout("tcp", addr, 4*time.Second)
+	}
+	if err != nil {
+		logrus.Warningf("Client initSocket: Connection to host %s timeout!", c.IP)
+		return err
+	}
+	return nil
 }
 
 func (c *Client) connectRemoteCommandSocket() (ok bool) {
@@ -54,7 +90,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 
 		// 4.本地发送sha384:发送本地密码sha384
 		passwordSha384 := hashext.GetSha384(config.Config.Server.Addr.Password)
-		base64EncryptLocalID, err := c.AesGCM.B64GCMEncrypt([]byte(c.Id))
+		base64EncryptLocalID, err := c.AesGCM.B64GCMEncrypt([]byte(c.ID))
 		if err != nil {
 			logrus.Debug("connectVerify: Encryption base64EncryptLocalID failed!")
 			return false
@@ -68,7 +104,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 				"id":            base64EncryptLocalID,
 			},
 		}
-		result, err := socket.SendCommandNoTimeDict(c.DataSocket, command, true)
+		result, err := socket.SendCommandNoTimeDict(c.dataSocket, command, true)
 		if err != nil {
 			logrus.Debugf("connectVerify: Sending data failed! %s", err)
 			return false
@@ -102,10 +138,10 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 			c.RemoteID = string(remoteID)
 			return true
 		case "fail":
-			logrus.Errorf("Failed to verify server %s password!", c.IP)
+			logrus.Errorf("connectVerify: Failed to verify server %s password!", c.IP)
 			return false
 		default:
-			logrus.Errorf("Unknown parameter obtained while verifying server %s password!", c.IP)
+			logrus.Errorf("connectVerify: Unknown parameter obtained while verifying server %s password!", c.IP)
 			return false
 		}
 
@@ -139,7 +175,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 			logrus.Debugf("connectVerifyNoPassword: Encrypting base64EncryptSessionPassword with publicKey %s failed!", publicKey)
 			return false
 		}
-		base64EncryptSessionID, err := encryption.RsaEncryptBase64([]byte(c.Id), aesPublicKey)
+		base64EncryptSessionID, err := encryption.RsaEncryptBase64([]byte(c.ID), aesPublicKey)
 		if err != nil {
 			logrus.Debugf("connectVerifyNoPassword: Encrypting base64EncryptSessionID with publicKey %s failed!", publicKey)
 			return false
@@ -153,7 +189,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 				"id":               base64EncryptSessionID,
 			},
 		}
-		result, err := socket.SendCommandNoTimeDict(c.DataSocket, replyCommand, true)
+		result, err := socket.SendCommandNoTimeDict(c.dataSocket, replyCommand, true)
 		if err != nil {
 			logrus.Debugf("connectVerifyNoPassword: Sending data failed! %s", err)
 			return false
@@ -165,14 +201,17 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 		}
 		remoteID, ok := data["id"].(string)
 		if !ok {
+			logrus.Debug("connectVerifyNoPassword: Verifying remote connection missing parameter remoteID")
 			return false
 		}
 		gcm, err := encryption.NewGCM(sessionPassword)
 		if err != nil {
+			logrus.Debug("connectVerifyNoPassword: NewGCM: Failed to create Cipher with key!")
 			return false
 		}
 		remoteID, err = gcm.StrB64GCMDecrypt(remoteID)
 		if err != nil {
+			logrus.Debug("connectVerifyNoPassword: Encryption remoteID failed!")
 			return false
 		}
 		c.RemoteID = remoteID
@@ -185,6 +224,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 		_, err := net.DialTimeout("tcp", address, time.Duration(4)*time.Second)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				logrus.Debugf("direct: Connection to %s failed", c.IP)
 				//error = errors.New("timeout")
 				return false
 			} else {
@@ -198,7 +238,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 	check := func() bool {
 		for i := 0; i < 3; i++ {
 			// 1.本地发送验证指令:发送指令开始进行验证
-			logrus.Debugf("Connecting to server %s for the %vth time", c.IP, i)
+			logrus.Debugf("check: Connecting to server %s for the %vth time", c.IP, i)
 			command := option.Command{
 				Command: "comm",
 				Type:    "verifyConnect",
@@ -207,7 +247,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 					"version": config.Config.Version,
 				},
 			}
-			result, err := socket.SendCommandNoTimeDict(c.CommandSocket, command, true)
+			result, err := socket.SendCommandNoTimeDict(c.commandSocket, command, true)
 			if err != nil {
 				return false
 			}
@@ -225,7 +265,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 					return false
 				}
 			} else if publicKeyOk && !remotePasswordSha256Ok {
-				logrus.Infof("Target server %s has no password set.", c.IP)
+				logrus.Infof("check: Target server %s has no password set.", c.IP)
 				if connectVerifyNoPassword([]byte(publicKey)) {
 					return true
 				} else {
@@ -233,7 +273,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 				}
 			}
 		}
-		logrus.Debugf("Verification failed with host X")
+		logrus.Debugf("check: Verification failed with host X")
 		return false
 	}
 	if c.AesGCM != nil {

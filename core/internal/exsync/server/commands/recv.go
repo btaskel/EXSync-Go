@@ -3,6 +3,7 @@ package commands
 import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
+	"github.com/sirupsen/logrus"
 	"net"
 )
 
@@ -14,18 +15,22 @@ type CommandProcess struct {
 	close         bool
 }
 
-func NewCommandProcess(key string, dataSocket, commandSocket net.Conn) *CommandProcess {
+func NewCommandProcess(key string, dataSocket, commandSocket net.Conn, timeChannel *timechannel.TimeChannel) {
 	gcm, err := encryption.NewGCM(key)
 	if err != nil {
-		return nil
+		logrus.Errorf("NewCommandProcess: Error creating instruction processor using %s! %s", key, err)
+		return
 	}
-	return &CommandProcess{
+	cp := CommandProcess{
 		AesGCM:        gcm,
-		TimeChannel:   timechannel.NewTimeChannel(),
+		TimeChannel:   timeChannel,
 		DataSocket:    dataSocket,
 		CommandSocket: commandSocket,
 		close:         false,
 	}
+	cp.recvCommand()
+
+	return
 }
 
 // recvCommand 以dict格式接收指令:

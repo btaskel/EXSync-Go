@@ -386,48 +386,134 @@ func main() {
 	//	"sss": 125,
 	//}}
 	//YourFunction(comm2)
-	s := map[string]any{
-		"data": map[string]string{
-			"a": "sss",
-		},
+	//s := map[string]any{
+	//	"data": map[string]string{
+	//		"a": "sss",
+	//	},
+	//}
+	//commandJson, err := json.Marshal(s)
+	//if err != nil {
+	//	return
+	//}
+	//var d map[string]any
+	//err = json.Unmarshal(commandJson, &d)
+	//if err != nil {
+	//	return
+	//}
+	//m, ok := d["datas"].(map[string]any)
+	//fmt.Println(ok, m)
+
+	//o := option2{
+	//	Age: 5,
+	//}
+	//Run(o)
+
+	//fmt.Println(&h)
+	//p := &h
+	//fmt.Println(&p)
+	//fmt.Println(p.Age)
+	t := test("Bt", 15, true)
+	//println(t.Name)
+	p := Person{H: t}
+	p.pr()
+	fmt.Println(p.H.Age)
+	fmt.Println(t.Age)
+}
+func test(name string, age int, gender bool) human {
+	h := human{
+		Name:   name,
+		Age:    age,
+		Gender: gender,
 	}
-	commandJson, err := json.Marshal(s)
-	if err != nil {
-		return
-	}
-	var d map[string]any
-	err = json.Unmarshal(commandJson, &d)
-	if err != nil {
-		return
-	}
-	m, ok := d["datas"].(map[string]any)
-	fmt.Println(ok, m)
+	return h
 }
 
-type Command struct {
-	Command string                 `json:"command"`
-	Type    string                 `json:"type"`
-	Method  string                 `json:"method"`
-	Data    map[string]interface{} `json:"data"`
+type human struct {
+	Name   string
+	Age    int
+	Gender bool
 }
 
-func (c Command) GetData() map[string]interface{} {
-	return c.Data
+type Person struct {
+	H human
 }
 
-type Reply struct {
-	Data map[string]interface{} `json:"data"`
+func (p *Person) pr() {
+	p.H.Age = 50
 }
 
-func (r Reply) GetData() map[string]interface{} {
-	return r.Data
-}
+//
+//// Run 批量接受指定接口范围内的对象，并对对象本身方法进行处理
+//func Run(data optioner) {
+//	fmt.Println(data)
+//}
+//
+//type optioner interface {
+//	Print()
+//	//print()
+//}
+//
+//type option struct {
+//	Name string
+//}
+//
+//func (o option) Print() {
+//	fmt.Println(o.Name)
+//}
+//
+//type option2 struct {
+//	Age int
+//}
+//
+//func (o option2) Print() {
+//	fmt.Println(o.Age)
+//}
 
-type DataHolder interface {
-	GetData() map[string]interface{}
-}
+//type option struct {
+//	Name string
+//	Age  int
+//	Data map[string]any
+//}
+//
+//type option2 struct {
+//	Data map[string]string
+//}
 
-func YourFunction(data DataHolder) {
-	// Your implementation here
-	fmt.Println(data.GetData())
-}
+//type animal interface {
+//	Run()
+//}
+//
+//type Cat struct {
+//}
+//
+//func (Cat) Run() {
+//	fmt.Println("跑步了")
+//}
+
+//type Command struct {
+//	Command string                 `json:"command"`
+//	Type    string                 `json:"type"`
+//	Method  string                 `json:"method"`
+//	Data    map[string]interface{} `json:"data"`
+//}
+//
+//func (c Command) GetData() map[string]interface{} {
+//	return c.Data
+//}
+//
+//type Reply struct {
+//	Data map[string]interface{} `json:"data"`
+//}
+//
+//func (r Reply) GetData() map[string]interface{} {
+//	return r.Data
+//}
+//
+//type DataHolder interface {
+//	GetData() map[string]interface{}
+//}
+//
+//func YourFunction(data DataHolder) {
+//	// Your implementation here
+//	fmt.Println(data.GetData())
+//}
