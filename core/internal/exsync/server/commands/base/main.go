@@ -3,6 +3,7 @@ package base
 import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
+	"EXSync/core/option"
 	"net"
 )
 
@@ -11,4 +12,5 @@ type CommandSet struct {
 	TimeChannel               *timechannel.TimeChannel
 	DataSocket, CommandSocket net.Conn
 	AesGCM                    *encryption.Gcm
+	VerifyManage              *map[string]option.VerifyManage
 }

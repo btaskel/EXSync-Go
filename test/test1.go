@@ -436,12 +436,12 @@ func main() {
 	//	},
 	//}
 	//fmt.Println(o.InnerStruct.Field) // 输出：42
-	dc := map[string]string{
-		"a": "A",
-	}
-	value, ok := dc["a"]
-	fmt.Println(ok)
-	fmt.Println(value)
+	//dc := map[string]string{
+	//	"a": "A",
+	//}
+	//value, ok := dc["a"]
+	//fmt.Println(ok)
+	//fmt.Println(value)
 }
 
 //func test(name string, age int, gender bool) human {

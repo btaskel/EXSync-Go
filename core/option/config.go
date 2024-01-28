@@ -12,6 +12,7 @@ type ConfigStruct struct {
 			Password string `json:"password"`
 		} `json:"addr"`
 		Setting struct {
+			//Protocol   string `json:"protocol"`
 			Encode     string `json:"encode"`
 			IOBalance  bool   `json:"iobalance"`
 			Encryption string `json:"encryption"`

@@ -17,7 +17,7 @@ func (c *CommandSet) VerifyConnect(data map[string]any, mark string) {
 	}
 	version, ok := data["version"].(float64)
 	if !ok {
-		logrus.Errorf("Host %s : Missing parameter [version] for execution [verifyConnect]", c.ip)
+		logrus.Errorf("Host %s : Missing parameter [version] for execution [verifyConnect]", c.Ip)
 		return
 	}
 	if version != config.Config.Version {
@@ -84,11 +84,22 @@ func (c *CommandSet) VerifyConnect(data map[string]any, mark string) {
 					"id":     localIDEncryptBase64,
 				},
 			}
+			_, err = session.SendCommand(command, false, true)
+			if err != nil {
+				return
+			}
+			// todo:验证成功
+		} else {
+			command = option.Command{
+				Command: "",
+				Type:    "",
+				Method:  "",
+				Data: map[string]any{
+					"status": "fail",
+				},
+			}
+			_, err = session.SendCommand(command, false, true)
 		}
-		_, err = session.SendCommand(command, false, true)
-		if err != nil {
-			return
-		}
-
 	}
+	return
 }

@@ -30,6 +30,21 @@ PS:
 * 数据传输端口：`[server_port]`
 * 指令端口：`[server_port + 1]`
 
+**大致通讯模型：**
+
+    主机A                               主机B
+
+    client(主动控制方—连接对方server)      client (主动控制方—连接对方server)
+    server(被动控制方-监听所有client)      server (被动控制方-监听所有client)
+
+    Server: CommandSocket持续接收来自Client的指令。
+            DataSocket持续接收来自Client的数据并转交给TimeChannel，同时可以主动发送到Client-DataSocket数据。
+    Client: CommandSocket主动向Server-CommandSocket发起指令。
+            DataSocket主动向Server-DataSocket发送数据，同时可以接收来自Server-DataSocket的数据并转交给TimeChannel。
+
+    只有A创建Client并与B的Server连接才能与B主动发起操作，B亦然。
+    每一个Client与Server连接后隔离建立TimeChannel。
+
 核心权限分级：
 
     guest(主要用于验证是否为用户)：0
@@ -49,7 +64,7 @@ PS:
                     "command": "data"/"comm", # 命令类型(数据类型/命令类型)
                     "type": "file",      # 操作类型(具体操作方式)
                     "method": "get",     # 操作方法(get/post 获取与提交)
-                    "data": {            # 参数数据集(具体参数)
+                    "data": {            # 参数数据(具体参数)
                         "a": 1
                         ....
                     }
@@ -60,7 +75,8 @@ PS:
 服务端答复至客户端指令套接字：
 
     ——————————————————————————————————————————————————
-    更改使用TimeDict实现数据的总体接收与解密。
+    更改使用TimeChannel实现数据的总体接收与解密。
+    每一个Client与Server连接后隔离建立TimeChannel。
     ——————————————————————————————————————————————————
 
 本同步工具使用 **相对路径同步** ：
@@ -71,6 +87,5 @@ PS:
         
         A. SpaceName | ./a/b/c.txt。
         B. 查询SpaceName的路径信息，与 ./a/b/c.txt 相连接得到文件绝对路径。
-
 
 _最后：有一部分是故意重造轮子，用于练习的_

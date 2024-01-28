@@ -5,30 +5,34 @@ import (
 	"EXSync/core/internal/exsync/server/commands/ext"
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
+	"EXSync/core/option"
 	"github.com/sirupsen/logrus"
 	"net"
 )
 
 type CommandProcess struct {
-	AesGCM        *encryption.Gcm
-	TimeChannel   *timechannel.TimeChannel
-	DataSocket    net.Conn
-	CommandSocket net.Conn
-	IP            string
-	close         bool
+	AesGCM                    *encryption.Gcm
+	TimeChannel               *timechannel.TimeChannel
+	CommandSocket, DataSocket net.Conn
+	IP                        string
+	close                     bool
+	VerifyManage              *map[string]option.VerifyManage
 }
 
-func NewCommandProcess(key string, dataSocket, commandSocket net.Conn, timeChannel *timechannel.TimeChannel) {
+// NewCommandProcess 对已经被动建立连接的CommandSocket进行初始化
+func NewCommandProcess(key string, dataSocket, commandSocket net.Conn, verifyManage *map[string]option.VerifyManage) {
 	gcm, err := encryption.NewGCM(key)
 	if err != nil {
 		logrus.Errorf("NewCommandProcess: Error creating instruction processor using %s! %s", key, err)
 		return
 	}
+	timeChannel := timechannel.NewTimeChannel()
 	cp := CommandProcess{
 		AesGCM:        gcm,
 		TimeChannel:   timeChannel,
 		DataSocket:    dataSocket,
 		CommandSocket: commandSocket,
+		VerifyManage:  verifyManage,
 		close:         false,
 	}
 	cp.recvCommand()
@@ -48,19 +52,20 @@ func NewCommandProcess(key string, dataSocket, commandSocket net.Conn, timeChann
 //	    }
 //	}
 func (c *CommandProcess) recvCommand() {
-	set := ext.CommandSet{Base: base.CommandSet{
+	commandSet := ext.CommandSet{Base: base.CommandSet{
 		AesGCM:        c.AesGCM,
 		Ip:            c.IP,
 		TimeChannel:   c.TimeChannel,
 		DataSocket:    c.DataSocket,
 		CommandSocket: c.CommandSocket,
+		VerifyManage:  c.VerifyManage,
 	}}
 	buf := make([]byte, 4096) // 数据接收切片
 	for {
 		if c.close {
 			return
 		}
-		n, err := c.CommandSocket.Read(buf)
+		n, err := c.DataSocket.Read(buf)
 		if err != nil {
 			continue
 		}

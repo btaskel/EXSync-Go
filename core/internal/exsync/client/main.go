@@ -31,13 +31,13 @@ type Client struct {
 	commandSocket, dataSocket    net.Conn
 }
 
-func NewClient(clientMark, ip string, timeChannel *timechannel.TimeChannel) (client Client, ok bool) {
+func NewClient(clientMark, ip string) (client Client, ok bool) {
 	gcm, err := encryption.NewGCM(config.Config.Server.Addr.Password)
 	if err != nil {
 		logrus.Errorf("NewClient: Failed to create AES-GCM! %s", ip)
 		return Client{}, false
 	}
-
+	timeChannel := timechannel.NewTimeChannel()
 	client = Client{
 		ClientMark:  clientMark,
 		IP:          ip,

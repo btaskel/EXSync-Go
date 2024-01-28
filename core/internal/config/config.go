@@ -11,7 +11,10 @@ import (
 	"strings"
 )
 
-var Config = initConfig()
+var (
+	Config   = initConfig()
+	UserData = initUserData(Config)
+)
 
 // initConfig 启动时进行初始化读取
 func initConfig() *option.ConfigStruct {
@@ -20,6 +23,20 @@ func initConfig() *option.ConfigStruct {
 		return nil
 	}
 	return config
+}
+
+func initUserData(config *option.ConfigStruct) map[string]option.UdDict {
+	userDataDict := make(map[string]option.UdDict)
+	for _, userdata := range config.Userdata {
+		userDataDict[userdata.Spacename] = option.UdDict{
+			Path:      userdata.Path,
+			Interval:  userdata.Interval,
+			Autostart: userdata.Autostart,
+			Active:    userdata.Active,
+			Devices:   userdata.Devices,
+		}
+	}
+	return userDataDict
 }
 
 // LoadConfig 加载Config文件

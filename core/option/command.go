@@ -12,3 +12,11 @@ type Command struct {
 	Method  string         `json:"method"`
 	Data    map[string]any `json:"data"`
 }
+
+type UdDict struct {
+	Path      string
+	Interval  int
+	Autostart bool
+	Active    bool
+	Devices   []string
+}
