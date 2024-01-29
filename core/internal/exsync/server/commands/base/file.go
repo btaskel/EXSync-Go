@@ -2,6 +2,7 @@ package base
 
 import (
 	"EXSync/core/internal/config"
+	"path"
 )
 
 func (c *CommandSet) getFile() {
@@ -45,6 +46,11 @@ func (c *CommandSet) postFile(data map[string]any, mark string) {
 		return
 	}
 
-	//status := "ok"
+	var status = ""
+
+	remoteFileAbsPath := path.Join(localSpace.Path, remoteFileRelativePath)
+	if len(remoteFileHash) != 32 {
+		status = "File hash too long!"
+	}
 
 }
