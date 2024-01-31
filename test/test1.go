@@ -442,6 +442,75 @@ func main() {
 	//value, ok := dc["a"]
 	//fmt.Println(ok)
 	//fmt.Println(value)
+	//fmt.Println(time.Now().UnixMilli())
+	//fileInfo, err := os.Stat("test\\test1.go")
+	//fmt.Println(err) //
+	//fmt.Println(fileInfo.Size())
+	//type User struct {
+	//	Name string
+	//	Age  uint
+	//}
+	//
+	////var user User
+	//user := User{}
+	//if user == nil {
+	//	fmt.Println("")
+	//}
+
+	//slice := []int{1, 2, 3, 4}
+	//slice := make([]int, 8, 8)
+	////slice[0] = 1
+	////slice[1] = 1
+	//slice = append(slice, 1)
+	//slice = append(slice, 1)
+	////slice = append(slice, 1)
+	////slice = append(slice, 1)
+	//fmt.Println(cap(slice))
+	//fmt.Println(len(slice))
+	//fmt.Println(slice)
+	//slice := []byte{2, 3, 9, 5}
+	//fmt.Println(string(slice[2]))
+	type Human struct {
+		Name int
+		Age  int
+	}
+
+	//h := new(Human)
+	h := &Human{}
+	fmt.Println(h.Age)
+
+	//var h Human
+	//fmt.Println(h.Age)
+	//fmt.Println(h)
+	//var human = Human{}
+	//fmt.Println(human.Age)
+	//h := Human{
+	//	Name: 1,
+	//	Age:  19,
+	//}
+	//fmt.Printf("%p\n", &h)
+	//fmt.Println(&h.Name)
+	//fmt.Println(&h.Age)
+	//i := 5
+	//var p *int
+	//p = &i
+	//fmt.Println(*p)
+
+	t := testStruct{Name: "Bt"}
+	//fmt.Println(&t)
+	fmt.Println(t.Name)
+	t.Test()
+	fmt.Println(t.Name)
+
+}
+
+type testStruct struct {
+	Name string
+}
+
+func (t testStruct) Test() {
+	t.Name = "None"
+	fmt.Println(t.Name)
 }
 
 //func test(name string, age int, gender bool) human {

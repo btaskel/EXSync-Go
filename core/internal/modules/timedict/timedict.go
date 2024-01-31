@@ -11,8 +11,8 @@ import (
 
 const timeout = 8
 
-func NewTimeDict() *TimeDict {
-	timedict := &TimeDict{
+func NewTimeDict() *timeDict {
+	timedict := &timeDict{
 		dict: sync.Map{},
 	}
 	go func() {
@@ -22,14 +22,14 @@ func NewTimeDict() *TimeDict {
 	return timedict
 }
 
-type TimeDict struct {
+type timeDict struct {
 	//dict map[string][][]byte // TimeDict存储
 	dict      sync.Map
 	closeFlag bool
 }
 
 // CreateRecv 创建一个数据流接收队列
-func (t *TimeDict) CreateRecv(mark string) {
+func (t *timeDict) CreateRecv(mark string) {
 	if len(mark) != 8 && t.HasKey(mark) {
 		return
 	}
@@ -40,7 +40,7 @@ func (t *TimeDict) CreateRecv(mark string) {
 	t.dict.Store(mark, [][]byte{data})
 }
 
-func (t *TimeDict) Set(key string, value []byte) bool {
+func (t *timeDict) Set(key string, value []byte) bool {
 	v, ok := t.dict.Load(key)
 	values := v.([][]byte)
 	if len(values) >= 65535 {
@@ -57,7 +57,7 @@ func (t *TimeDict) Set(key string, value []byte) bool {
 	}
 }
 
-func (t *TimeDict) Get(key string) (data []byte, ok bool) {
+func (t *timeDict) Get(key string) (data []byte, ok bool) {
 	tic1 := time.Now().Unix()
 	for {
 		v, ok := t.dict.Load(key)
@@ -84,11 +84,11 @@ func (t *TimeDict) Get(key string) (data []byte, ok bool) {
 	}
 }
 
-func (t *TimeDict) DelKey(key string) {
+func (t *timeDict) DelKey(key string) {
 	t.dict.Delete(key)
 }
 
-func (t *TimeDict) HasKey(key string) bool {
+func (t *timeDict) HasKey(key string) bool {
 	if _, ok := t.dict.Load(key); ok {
 		return true
 	} else {
@@ -97,11 +97,11 @@ func (t *TimeDict) HasKey(key string) bool {
 }
 
 // CloseTimeDict 关闭timedict
-func (t *TimeDict) CloseTimeDict() {
+func (t *timeDict) CloseTimeDict() {
 	t.closeFlag = true
 }
 
-func (t *TimeDict) release() {
+func (t *timeDict) release() {
 	for {
 		if !t.closeFlag {
 			t.dict = sync.Map{}
@@ -125,11 +125,11 @@ func (t *TimeDict) release() {
 
 // NewSocketTimeDict 创建SocketTimeDict实例
 func NewSocketTimeDict(key string) *SocketTimeDict {
-	return &SocketTimeDict{TimeDict{dict: sync.Map{}}, key}
+	return &SocketTimeDict{timeDict{dict: sync.Map{}}, key}
 }
 
 type SocketTimeDict struct {
-	TimeDict
+	timeDict
 	Key string
 }
 

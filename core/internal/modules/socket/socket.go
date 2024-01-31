@@ -30,7 +30,7 @@ type Session struct {
 //	3: 当command传入, data为空，将会按照sendCommandNoTimedict()进行对话(特殊用途);
 //	4: 当data, command都传入, 第一条会通过command_socket发送至对方的指令处理,
 //	    接下来的会话将会使用data_socket进行处理(适用于指令环境下);
-func NewSession(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket net.Conn, mark, key string) (*Session, error) {
+func NewSession(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket net.Conn, mark string, aesGcm *encryption.Gcm) (*Session, error) {
 
 	if len(mark) != 8 {
 		return nil, errors.New("SocketSession: Mark标识缺少")
@@ -48,14 +48,8 @@ func NewSession(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket 
 	} else {
 		method = 2
 	}
-	var aesGcm *encryption.Gcm = nil
+	//var aesGcm *encryption.Gcm = nil
 	var err error
-	if key != "" {
-		aesGcm, err = encryption.NewGCM(key)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	if timeChannel != nil {
 		err = timeChannel.CreateRecv(mark)

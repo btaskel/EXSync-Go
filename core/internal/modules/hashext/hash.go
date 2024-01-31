@@ -22,8 +22,8 @@ func GetRandomStr(length int) string {
 	return string(b)
 }
 
-// getXXHash 获取一个文件的64位的xx哈希值
-func getXXHash(path string) (fileHash string, err error) {
+// GetXXHash 获取一个文件的64位的xx哈希值
+func GetXXHash(path string) (fileHash string, err error) {
 	file, err := os.Open(path)
 	defer func(file *os.File) {
 		err := file.Close()

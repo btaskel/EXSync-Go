@@ -7,10 +7,13 @@ import (
 	"net"
 )
 
-type CommandSet struct {
+type Base struct {
 	Ip                        string
 	TimeChannel               *timechannel.TimeChannel
 	DataSocket, CommandSocket net.Conn
 	AesGCM                    *encryption.Gcm
 	VerifyManage              *map[string]option.VerifyManage
+
+	//block          uint
+	EncryptionLoss uint
 }

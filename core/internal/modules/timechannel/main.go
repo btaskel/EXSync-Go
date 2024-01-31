@@ -13,7 +13,7 @@ type TimeChannel struct {
 // NewTimeChannel 创建一个数据接收队列
 func NewTimeChannel() *TimeChannel {
 	return &TimeChannel{
-		map[string]chan []byte{},
+		make(map[string]chan []byte),
 	}
 }
 

@@ -137,7 +137,7 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 	}
 	{
 		mark := hashext.GetRandomStr(8)
-		session, err := socket.NewSession(nil, nil, conn, mark, "")
+		session, err := socket.NewSession(nil, nil, conn, mark, nil)
 		if err != nil {
 			logrus.Debugf("scan : An error occurred while establishing a new session for %s", ip)
 			return

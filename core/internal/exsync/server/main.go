@@ -4,7 +4,7 @@ import (
 	"EXSync/core/internal/config"
 	"EXSync/core/internal/exsync/client"
 	"EXSync/core/internal/exsync/server/commands"
-	"EXSync/core/internal/exsync/server/commands/base"
+	"EXSync/core/internal/exsync/server/commands/ext"
 	"EXSync/core/internal/exsync/server/scan"
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/option"
@@ -20,7 +20,7 @@ type Server struct {
 	ConnectManage      map[string]option.ConnectManage
 	StopNewConnections bool
 	mergeSocketDict    map[string]map[string]net.Conn
-	commandSet         *base.CommandSet
+	commandSet         *ext.CommandSet
 }
 
 func NewServer() *Server {

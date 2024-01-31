@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"EXSync/core/internal/exsync/server/commands/base"
 	"EXSync/core/internal/exsync/server/commands/ext"
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
@@ -52,14 +51,11 @@ func NewCommandProcess(key string, dataSocket, commandSocket net.Conn, verifyMan
 //	    }
 //	}
 func (c *CommandProcess) recvCommand() {
-	commandSet := ext.CommandSet{Base: base.CommandSet{
-		AesGCM:        c.AesGCM,
-		Ip:            c.IP,
-		TimeChannel:   c.TimeChannel,
-		DataSocket:    c.DataSocket,
-		CommandSocket: c.CommandSocket,
-		VerifyManage:  c.VerifyManage,
-	}}
+	commandSet, err := ext.NewCommandSet(c.TimeChannel, c.DataSocket, c.CommandSocket, c.AesGCM, c.VerifyManage)
+	if err != nil {
+
+	}
+
 	buf := make([]byte, 4096) // 数据接收切片
 	for {
 		if c.close {
