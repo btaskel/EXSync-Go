@@ -1,10 +1,4 @@
-package option
-
-const (
-	GUEST = 0
-	USER  = 10
-	ADMIN = 20
-)
+package comm
 
 type Command struct {
 	Command string         `json:"command"`
@@ -14,6 +8,7 @@ type Command struct {
 }
 
 type UdDict struct {
+	SpaceName string
 	Path      string
 	Interval  int
 	Autostart bool

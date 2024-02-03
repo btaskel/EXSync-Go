@@ -1,9 +1,9 @@
 package base
 
-func (c *CommandSet) GetFolder() {
+func (c *Base) GetFolder() {
 
 }
 
-func (c *CommandSet) PostFolder() {
+func (c *Base) PostFolder() {
 
 }

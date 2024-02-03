@@ -51,9 +51,10 @@ func NewCommandProcess(key string, dataSocket, commandSocket net.Conn, verifyMan
 //	    }
 //	}
 func (c *CommandProcess) recvCommand() {
-	commandSet, err := ext.NewCommandSet(c.TimeChannel, c.DataSocket, c.CommandSocket, c.AesGCM, c.VerifyManage)
+	commandSet, err := ext.NewCommandSet(c.TimeChannel, c.DataSocket, c.CommandSocket, c.AesGCM, c.VerifyManage, 28)
 	if err != nil {
-
+		logrus.Errorf("recvCommand: Failed to initialize commandSet! %s", err)
+		return
 	}
 
 	buf := make([]byte, 4096) // 数据接收切片

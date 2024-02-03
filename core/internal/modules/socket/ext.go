@@ -1,7 +1,6 @@
 package socket
 
 import (
-	"EXSync/core/option"
 	"encoding/json"
 	"net"
 )
@@ -15,7 +14,7 @@ import (
 //	EncryptionLoss int
 //}
 
-func SendCommandNoTimeDict(socket net.Conn, command option.Command, output bool) (result map[string]any, err error) {
+func SendCommandNoTimeDict(socket net.Conn, command command.Command, output bool) (result map[string]any, err error) {
 	commandJson, err := json.Marshal(command)
 	if err != nil {
 		return nil, err

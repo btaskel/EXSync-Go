@@ -3,6 +3,7 @@ package config
 import (
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/option"
+	"EXSync/core/option/server/comm"
 	"encoding/json"
 	"github.com/sirupsen/logrus"
 	"net"
@@ -25,10 +26,10 @@ func initConfig() *option.ConfigStruct {
 	return config
 }
 
-func initUserData(config *option.ConfigStruct) map[string]option.UdDict {
-	userDataDict := make(map[string]option.UdDict)
+func initUserData(config *option.ConfigStruct) map[string]comm.UdDict {
+	userDataDict := make(map[string]comm.UdDict)
 	for _, userdata := range config.Userdata {
-		userDataDict[userdata.Spacename] = option.UdDict{
+		userDataDict[userdata.Spacename] = comm.UdDict{
 			Path:      userdata.Path,
 			Interval:  userdata.Interval,
 			Autostart: userdata.Autostart,

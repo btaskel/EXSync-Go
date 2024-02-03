@@ -10,3 +10,9 @@ const (
 	// PacketSize 数据包发送大小，默认4096
 	PacketSize = 4096
 )
+
+const (
+	GUEST = 0
+	USER  = 10
+	ADMIN = 20
+)

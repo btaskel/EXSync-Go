@@ -19,5 +19,6 @@ type Index struct {
 }
 
 type Status struct {
+	gorm.Model
 	exclude bool
 }

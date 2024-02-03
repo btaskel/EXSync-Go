@@ -15,5 +15,5 @@ type Base struct {
 	VerifyManage              *map[string]option.VerifyManage
 
 	//block          uint
-	EncryptionLoss uint
+	EncryptionLoss int
 }

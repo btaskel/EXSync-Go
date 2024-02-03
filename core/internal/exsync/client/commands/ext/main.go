@@ -3,7 +3,7 @@ package ext
 import "EXSync/core/internal/exsync/client/commands/base"
 
 type CommandSet struct {
-	base.CommandSet
+	base.Base
 }
 
 func SyncFile() {

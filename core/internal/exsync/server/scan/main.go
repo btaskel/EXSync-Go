@@ -8,6 +8,7 @@ import (
 	"EXSync/core/internal/modules/socket"
 	"EXSync/core/internal/proxy"
 	"EXSync/core/option"
+	"EXSync/core/option/server/comm"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
@@ -123,7 +124,7 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 			fmt.Print(err)
 		}
 	}(conn)
-	command := option.Command{
+	command := comm.Command{
 		Command: "comm",
 		Type:    "verifyConnect",
 		Method:  "post",
@@ -166,7 +167,7 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 			//		"id":            base64EncryptLocalID,
 			//	},
 			//}
-			replyCommand := option.Command{
+			replyCommand := comm.Command{
 				Command: "",
 				Type:    "",
 				Method:  "",
@@ -247,7 +248,7 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 			if err != nil {
 				return
 			}
-			replyCommand := option.Command{
+			replyCommand := comm.Command{
 				Command: "",
 				Type:    "",
 				Method:  "",

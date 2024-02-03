@@ -470,14 +470,14 @@ func main() {
 	//fmt.Println(slice)
 	//slice := []byte{2, 3, 9, 5}
 	//fmt.Println(string(slice[2]))
-	type Human struct {
-		Name int
-		Age  int
-	}
-
-	//h := new(Human)
-	h := &Human{}
-	fmt.Println(h.Age)
+	//type Human struct {
+	//	Name int
+	//	Age  int
+	//}
+	//
+	////h := new(Human)
+	//h := &Human{}
+	//fmt.Println(h.Age)
 
 	//var h Human
 	//fmt.Println(h.Age)
@@ -496,21 +496,26 @@ func main() {
 	//p = &i
 	//fmt.Println(*p)
 
-	t := testStruct{Name: "Bt"}
-	//fmt.Println(&t)
-	fmt.Println(t.Name)
-	t.Test()
-	fmt.Println(t.Name)
+	//	t := testStruct{Name: "Bt"}
+	//	//fmt.Println(&t)
+	//	fmt.Println(t.Name)
+	//	t.Test()
+	//	fmt.Println(t.Name)
+	//
+	//}
+	//
+	//type testStruct struct {
+	//	Name string
+	//}
+	//
+	//func (t testStruct) Test() {
+	//	t.Name = "None"
+	//	fmt.Println(t.Name)
+	//a := 5
+	//fmt.Println(a / 2)
+	//r := 5 % 2
+	//fmt.Println(r)
 
-}
-
-type testStruct struct {
-	Name string
-}
-
-func (t testStruct) Test() {
-	t.Name = "None"
-	fmt.Println(t.Name)
 }
 
 //func test(name string, age int, gender bool) human {

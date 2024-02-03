@@ -3,7 +3,7 @@ package socket
 import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
-	"EXSync/core/option"
+	"EXSync/core/option/server/comm"
 	"encoding/json"
 	"errors"
 	"github.com/sirupsen/logrus"
@@ -69,7 +69,7 @@ func NewSession(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket 
 	}, nil
 }
 
-func (s *Session) SendCommand(data option.Command, output, encrypt bool) (result map[string]any, err error) {
+func (s *Session) SendCommand(data comm.Command, output, encrypt bool) (result map[string]any, err error) {
 	commandJson, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
@@ -129,7 +129,7 @@ func (s *Session) SendData(data []byte) (err error) {
 		_, err = s.dataSocket.Write(byteData)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
+				logrus.Warningf("SendData: Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
 				return err
 			} else {
 				return err
@@ -146,7 +146,7 @@ func (s *Session) SendData(data []byte) (err error) {
 		_, err = s.dataSocket.Write(byteData)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
+				logrus.Warningf("SendData: Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
 				return err
 			} else {
 				return err
@@ -154,6 +154,16 @@ func (s *Session) SendData(data []byte) (err error) {
 		}
 		return nil
 	}
+}
+
+// SendDataP
+func (s *Session) SendDataP(data []byte) (err error) {
+	byteData, err := s.aesGCM.AesGcmEncrypt(append(s.mark, data...))
+	_, err = s.dataSocket.Write(byteData)
+	if err != nil {
+		logrus.Warningf("SendDataP: Sending data to %s timeout", err)
+	}
+	return
 }
 
 //// Send 如果发送为[]byte类型，则立即发送

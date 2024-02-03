@@ -14,7 +14,7 @@ type CommandSet struct {
 
 // NewCommandSet 创建扩展指令集对象
 func NewCommandSet(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket net.Conn, AesGCM *encryption.Gcm,
-	verifyManage *map[string]option.VerifyManage, EncryptionLoss uint) (commandSet *CommandSet, err error) {
+	verifyManage *map[string]option.VerifyManage, EncryptionLoss int) (commandSet *CommandSet, err error) {
 	addr := commandSocket.RemoteAddr().String()
 	ip, _, err := net.SplitHostPort(addr)
 	if err != nil {

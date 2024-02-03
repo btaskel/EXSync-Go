@@ -2,6 +2,9 @@ package hashext
 
 import (
 	"fmt"
+	"github.com/cespare/xxhash/v2"
+	"io"
+	"os"
 	"testing"
 )
 
@@ -12,7 +15,7 @@ func TestGetRandomStr(t *testing.T) {
 }
 
 func TestGetXXHash(t *testing.T) {
-	hash, err := getXXHash("test.txt")
+	hash, err := GetXXHash("test.txt")
 	if err != nil {
 		return
 	}
@@ -28,4 +31,30 @@ func TestGetSha384(t *testing.T) {
 func TestGetSha256(t *testing.T) {
 	hash := GetSha256("测试文字")
 	fmt.Println(hash)
+}
+
+func TestUpdateXXHash(t *testing.T) {
+	f, err := os.Open("hash.go")
+	if err != nil {
+		fmt.Println("1")
+	}
+	hasher := xxhash.New()
+	for {
+		buf := make([]byte, 8192)
+		n, err := f.Read(buf)
+		if err != nil && err != io.EOF {
+			return
+		}
+		if n == 0 {
+			break
+		}
+		//fmt.Println(string(buf[:n]))
+
+		_, err = hasher.Write(buf[:n])
+		if err != nil {
+			return
+		}
+	}
+	fmt.Println(hasher.Sum([]byte{5, 85}))
+
 }

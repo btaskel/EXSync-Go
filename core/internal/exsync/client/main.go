@@ -8,7 +8,6 @@ import (
 	"EXSync/core/internal/modules/socket"
 	"EXSync/core/internal/modules/timechannel"
 	"EXSync/core/internal/proxy"
-	"EXSync/core/option"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
@@ -94,7 +93,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 			logrus.Debug("connectVerify: Encryption base64EncryptLocalID failed!")
 			return false
 		}
-		command := option.Command{
+		command := command.Command{
 			Command: "",
 			Type:    "",
 			Method:  "",
@@ -179,7 +178,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 			logrus.Debugf("connectVerifyNoPassword: Encrypting base64EncryptSessionID with publicKey %s failed!", publicKey)
 			return false
 		}
-		replyCommand := option.Command{
+		replyCommand := command.Command{
 			Command: "",
 			Type:    "",
 			Method:  "",
@@ -239,7 +238,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool) {
 		for i := 0; i < 3; i++ {
 			// 1.本地发送验证指令:发送指令开始进行验证
 			logrus.Debugf("check: Connecting to server %s for the %vth time", c.IP, i)
-			command := option.Command{
+			command := command.Command{
 				Command: "comm",
 				Type:    "verifyConnect",
 				Method:  "post",

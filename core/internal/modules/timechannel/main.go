@@ -60,6 +60,23 @@ func (t *TimeChannel) Get(mark string) (data []byte, err error) {
 
 }
 
+// GetTimeout 获取指定mark的首部，如果超时则返回timeout错误
+func (t *TimeChannel) GetTimeout(mark string, timeout int) (data []byte, err error) {
+	if timeout == 0 {
+		timeout = config.SocketTimeout
+	}
+	if channel, ok := t.channelDict[mark]; ok {
+		select {
+		case value := <-channel:
+			return value, nil
+		case <-time.After(time.Duration(timeout) * time.Second):
+			return nil, errors.New("timeout")
+		}
+	}
+	return nil, errors.New("markDoesNotExist")
+
+}
+
 // DelKey 释放指定mark的channel对象
 func (t *TimeChannel) DelKey(mark string) {
 	if channel, ok := t.channelDict[mark]; ok {

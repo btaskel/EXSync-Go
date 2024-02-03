@@ -5,13 +5,13 @@ import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/socket"
-	"EXSync/core/option"
+	"EXSync/core/option/server/comm"
 	"github.com/sirupsen/logrus"
 )
 
-func (c *CommandSet) VerifyConnect(data map[string]any, mark string) {
+func (c *Base) VerifyConnect(data map[string]any, mark string) {
 	defer c.TimeChannel.DelKey(mark) // 释放当前会话
-	session, err := socket.NewSession(c.TimeChannel, c.DataSocket, nil, mark, "")
+	session, err := socket.NewSession(c.TimeChannel, c.DataSocket, nil, mark, nil)
 	if err != nil {
 		return
 	}
@@ -31,7 +31,7 @@ func (c *CommandSet) VerifyConnect(data map[string]any, mark string) {
 		// 2.验证远程sha256值是否与本地匹配: 发送本地的password_sha256值到远程
 		// 如果密码不为空, 则无需进行密钥交换, 只需验证密钥即可
 		passwordSha256 := hashext.GetSha256(config.Config.Server.Addr.Password)
-		command := option.Command{
+		command := comm.Command{
 			Command: "",
 			Type:    "",
 			Method:  "",
@@ -75,7 +75,7 @@ func (c *CommandSet) VerifyConnect(data map[string]any, mark string) {
 			return
 		}
 		if remotePasswordSha384 == localPasswordSha384 {
-			command = option.Command{
+			command = comm.Command{
 				Command: "",
 				Type:    "",
 				Method:  "",
@@ -90,7 +90,7 @@ func (c *CommandSet) VerifyConnect(data map[string]any, mark string) {
 			}
 			// todo:验证成功
 		} else {
-			command = option.Command{
+			command = comm.Command{
 				Command: "",
 				Type:    "",
 				Method:  "",
