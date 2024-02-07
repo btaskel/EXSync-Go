@@ -111,7 +111,7 @@ func (c *Base) GetFile(data map[string]any) {
 			return
 		}
 		if remoteFileHash != file.Hash {
-			if file.Size > remoteFileSize {
+			if file.Size > remoteFileSize && remoteFileSize != 0 {
 				// 1.本地文件大于远程文件，等待判断是否为需续写文件；
 				// 2.本地文件不存在，需要对方发送文件；
 				f, err := os.Open(remoteAbsPath)
@@ -155,10 +155,18 @@ func (c *Base) GetFile(data map[string]any) {
 						return
 					}
 					defer f.Close()
-					c.sendData(f, fileMark, dataBlock, remoteFileSize-file.Size)
+					c.sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
 				}
 
-			} else if file.Size == sizeList[i] {
+			} else if file.Size > remoteFileSize && remoteFileSize == 0 {
+				// 远程文件不存在，需要传输
+				f, err := os.Open(remoteAbsPath)
+				if err != nil {
+					return
+				}
+				defer f.Close()
+				c.sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
+			} else if file.Size == remoteFileSize {
 				// 1.文件大小相同，哈希值不同；
 				// 2.本地或远程文件不存在；
 			} else {

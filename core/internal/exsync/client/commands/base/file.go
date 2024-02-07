@@ -158,6 +158,26 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 
 			} else if remoteFileSize > localFileSize && localFileSize == 0 {
 				// 本地文件不存在
+				f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0667)
+				if err != nil {
+					return
+				}
+				defer f.Close()
+				for {
+					result, err := c.TimeChannel.Get(fileMark)
+					if err != nil {
+						logrus.Errorf("subRoutine: Timed out while reading data")
+						return
+					}
+					_, err = f.Write(result)
+					if err != nil {
+						return
+					}
+					localFileSize += dataBlock
+					if localFileSize >= remoteFileSize {
+						break
+					}
+				}
 
 			} else if remoteFileSize == localFileSize {
 				// 1.文件大小相同，哈希值不同；
