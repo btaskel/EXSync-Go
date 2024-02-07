@@ -515,7 +515,32 @@ func main() {
 	//fmt.Println(a / 2)
 	//r := 5 % 2
 	//fmt.Println(r)
+	//f, err := os.OpenFile("test.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0667)
+	//buf := []byte{1, 55, 255}
+	//n, err := f.Write(buf)
+	//if err != nil {
+	//	return
+	//}
+	//fmt.Println(n)
+	//fileStat, err := os.Stat("tsest.txt")
+	//if err != nil && os.IsNotExist(err) {
+	//	fmt.Println(err)
+	//}
+	//fmt.Println(fileStat.Size())
+	//type Human struct {
+	//	Name string
+	//	Age  uint
+	//}
+	//fmt.Println(unsafe.Sizeof(Human{}))
+	test(1)
+}
 
+func test(i int) {
+	if i == 1 {
+		defer fmt.Println(1)
+	} else if i == 2 {
+		defer fmt.Println(2)
+	}
 }
 
 //func test(name string, age int, gender bool) human {

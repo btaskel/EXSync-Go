@@ -1,8 +1,11 @@
 package config
 
 const (
-	// configPath 配置文件存放路径
-	configPath = ".\\data\\config"
+	// ConfigPath 配置文件存放路径
+	ConfigPath = ".\\data\\config"
+
+	// SpaceInfoPath EXSync数据存放路径
+	SpaceInfoPath = ".sync\\db"
 
 	// SocketTimeout Socket超时时间
 	SocketTimeout = 8 // Socket发送接收超时阈值

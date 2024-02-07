@@ -156,7 +156,7 @@ func (s *Session) SendData(data []byte) (err error) {
 	}
 }
 
-// SendDataP
+// SendDataP SendData的性能版本
 func (s *Session) SendDataP(data []byte) (err error) {
 	byteData, err := s.aesGCM.AesGcmEncrypt(append(s.mark, data...))
 	_, err = s.dataSocket.Write(byteData)
@@ -308,12 +308,28 @@ func SendControl(data any) {
 }
 
 // Recv 从指定mark队列接收数据
-func (s *Session) Recv() (data []byte, ok bool) {
+func (s *Session) Recv() (command comm.Command, ok bool) {
 	data, err := s.timeChannel.Get(string(s.mark))
 	if err != nil {
-		return nil, false
+		return
 	}
-	return data, true
+	err = json.Unmarshal(data, &command)
+	if err != nil {
+		return
+	}
+	return command, true
+}
+
+func (s *Session) RecvTimeout(timeout int) (command comm.Command, ok bool) {
+	data, err := s.timeChannel.GetTimeout(string(s.mark), timeout)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(data, &command)
+	if err != nil {
+		return
+	}
+	return command, true
 }
 
 // GetSessionCount 当前会话次数
@@ -321,18 +337,7 @@ func (s *Session) GetSessionCount() int {
 	return s.count
 }
 
-//func (s *Session) isEncrypt(data []byte) {
-//	if s.aesGCM != nil {
-//		if len(v) > 4060 {
-//			panic("sendNoTimeDict: 指令发送时大于4060个字节")
-//		} else if len(v) < 36 {
-//			panic("sendNoTimeDict: 指令发送时无字节")
-//		}
-//	} else {
-//		if len(v) > 4088 {
-//			panic("sendNoTimeDict: 指令发送时大于4088个字节")
-//		} else if len(v) <= 8 {
-//			panic("sendNoTimeDict: 指令发送时无字节")
-//		}
-//	}
-//}
+// Close 关闭当前会话
+func (s *Session) Close() {
+	s.timeChannel.DelKey(string(s.mark))
+}
