@@ -107,7 +107,7 @@ func (s *Server) verifyCommandSocket(commandSocket net.Conn) {
 	if hostInfo, ok := s.VerifyManage[host]; ok && hostInfo.AesKey != "" {
 		// todo: 验证通过处理
 		if dataSocket, ok := s.mergeSocketDict[host]["command"]; ok {
-			go commands.NewCommandProcess(s.VerifyManage[host].AesKey, dataSocket, commandSocket, &s.VerifyManage)
+			go commands.NewCommandProcess(host, dataSocket, commandSocket, &s.VerifyManage)
 			delete(s.mergeSocketDict, host)
 		} else {
 			s.mergeSocketDict[host] = map[string]net.Conn{
@@ -135,7 +135,7 @@ func (s *Server) verifyDataSocket(dataSocket net.Conn) {
 	if hostInfo, ok := s.VerifyManage[host]; ok && hostInfo.AesKey != "" {
 		// todo: 验证通过处理
 		if commandSocket, ok := s.mergeSocketDict[host]["command"]; ok {
-			go commands.NewCommandProcess(s.VerifyManage[host].AesKey, dataSocket, commandSocket, &s.VerifyManage)
+			go commands.NewCommandProcess(host, dataSocket, commandSocket, &s.VerifyManage)
 			delete(s.mergeSocketDict, host)
 		} else {
 			s.mergeSocketDict[host] = map[string]net.Conn{

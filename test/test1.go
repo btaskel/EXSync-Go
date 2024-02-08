@@ -532,16 +532,37 @@ func main() {
 	//	Age  uint
 	//}
 	//fmt.Println(unsafe.Sizeof(Human{}))
-	test(1)
-}
+	//test(1)
+	//fmt.Println(time.Now().UnixMilli())
+	//_, b := time.Now().Zone()
+	//fmt.Println(b / 3600)
+	//
+	//m_b := time.Now().UnixMilli() // 8
+	//
+	//m_a := 1707387183486 - 18000000 // 3
 
-func test(i int) {
-	if i == 1 {
-		defer fmt.Println(1)
-	} else if i == 2 {
-		defer fmt.Println(2)
+	//t := time.Now()
+	//fmt.Println(t.Year(), t.Month(), t.Day())
+
+	type Human struct {
+	}
+	human := &Human{}
+	fmt.Println(human)
+	if human == nil {
+		fmt.Println("空")
+	} else {
+		fmt.Println("非空")
 	}
 }
+
+//
+//func test(i int) {
+//	if i == 1 {
+//		defer fmt.Println(1)
+//	} else if i == 2 {
+//		defer fmt.Println(2)
+//	}
+//}
 
 //func test(name string, age int, gender bool) human {
 //	h := human{

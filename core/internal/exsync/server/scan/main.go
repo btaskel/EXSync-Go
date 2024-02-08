@@ -50,7 +50,6 @@ func (s *Scan) ScanDevices() {
 		for _, device := range devices {
 			ipSet[device] = struct{}{}
 		}
-		//ipSet = append(ipSet, devices...)
 	case "white":
 		logrus.Debug("scan: White List. Search for IP completed")
 		for _, device := range scan.Devices {

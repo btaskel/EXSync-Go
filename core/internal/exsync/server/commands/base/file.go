@@ -23,6 +23,7 @@ func (c *Base) sendData(file *os.File, fileMark string, dataBlock, total int64) 
 	if err != nil {
 		return
 	}
+	defer s.Close()
 
 	buffer := make([]byte, dataBlock)
 	var readData int64
@@ -441,6 +442,7 @@ func (c *Base) PostFile(data map[string]any, replyMark string, db *gorm.DB) {
 	if err != nil {
 		return
 	}
+	defer session.Close()
 
 	_, err = session.SendCommand(command, false, true)
 	if err != nil {

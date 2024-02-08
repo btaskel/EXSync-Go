@@ -3,6 +3,7 @@ package base
 import (
 	"EXSync/core/internal/config"
 	"EXSync/core/internal/modules/hashext"
+	"EXSync/core/internal/modules/pathext"
 	"EXSync/core/internal/modules/socket"
 	"EXSync/core/option"
 	"EXSync/core/option/server/comm"
@@ -97,6 +98,7 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 		}
 
 		filePath := path.Join(space.Path, outPath)
+
 		// 创建会话接收首次答复
 		s, err := socket.NewSession(c.TimeChannel, c.DataSocket, nil, replyMark, c.AesGCM)
 		defer s.Close()
@@ -134,6 +136,7 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 					return
 				}
 
+				pathext.MakeDir(filePath)
 				f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0667)
 				if err != nil {
 					return
@@ -158,6 +161,7 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 
 			} else if remoteFileSize > localFileSize && localFileSize == 0 {
 				// 本地文件不存在
+				pathext.MakeDir(filePath)
 				f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0667)
 				if err != nil {
 					return
