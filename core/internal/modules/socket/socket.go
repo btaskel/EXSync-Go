@@ -3,7 +3,7 @@ package socket
 import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
-	"EXSync/core/option/server/comm"
+	"EXSync/core/option/exsync/comm"
 	"encoding/json"
 	"errors"
 	"github.com/sirupsen/logrus"
@@ -295,11 +295,13 @@ func (s *Session) sendTimeDict(conn net.Conn, command []byte, output bool) (map[
 			if err != nil {
 				return nil, err
 			}
+			s.count += 1
 			return decodeData, nil
 		} else {
 			return nil, err
 		}
 	}
+	s.count += 1
 	return nil, nil
 }
 
@@ -337,7 +339,9 @@ func (s *Session) GetSessionCount() int {
 	return s.count
 }
 
-// Close 关闭当前会话
+// Close 尝试关闭当前会话
 func (s *Session) Close() {
-	s.timeChannel.DelKey(string(s.mark))
+	if s.timeChannel != nil {
+		s.timeChannel.DelKey(string(s.mark))
+	}
 }

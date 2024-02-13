@@ -7,8 +7,8 @@ import (
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/socket"
 	"EXSync/core/internal/proxy"
-	"EXSync/core/option"
-	"EXSync/core/option/server/comm"
+	"EXSync/core/option/exsync/comm"
+	serverOption "EXSync/core/option/exsync/server"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
@@ -20,9 +20,7 @@ import (
 	"time"
 )
 
-type Scan struct {
-	VerifyManage map[string]option.VerifyManage
-}
+var VerifyManage map[string]serverOption.VerifyManage
 
 //// NewScan 创建一个设备扫描实例
 //func NewScan() *Scan {
@@ -35,7 +33,7 @@ type Scan struct {
 // LAN模式：逐一扫描局域网并自动搜寻具有正确密钥的计算机
 // 白名单模式：在此模式下只有添加的ip才能连接
 // 黑名单模式：在此模式下被添加的ip将无法连接
-func (s *Scan) ScanDevices() {
+func ScanDevices() {
 	ipSet := make(map[string]struct{})
 
 	scan := config.Config.Server.Scan
@@ -70,36 +68,36 @@ func (s *Scan) ScanDevices() {
 		delete(ipSet, ip)
 	}
 
-	s.checkDevices(ipSet) // 将会更新verifyManage
+	checkDevices(ipSet) // 将会更新verifyManage
 }
 
 // checkDevices 检查设备并返回当前批次已验证列表
 // 主动验证：主动嗅探并验证ip列表是否存在活动的设备, 如果存在活动的设备判断密码是否相同
 // [1,4] [2,3]
-func (s *Scan) checkDevices(ipSet map[string]struct{}) {
+func checkDevices(ipSet map[string]struct{}) {
 	wait := sync.WaitGroup{}
-	for ip := range s.VerifyManage {
+	for ip := range VerifyManage {
 		_, ok := ipSet[ip]
 		if !ok {
-			delete(s.VerifyManage, ip)
+			delete(VerifyManage, ip)
 		}
 	}
 	for NewIps := range ipSet {
-		_, ok := s.VerifyManage[NewIps]
+		_, ok := VerifyManage[NewIps]
 		if ok {
 			delete(ipSet, NewIps)
 		}
 	}
 	wait.Add(len(ipSet))
 	for NewIps := range ipSet {
-		go s.connectServer(NewIps, &wait) // 判断主机是否通过验证
+		go connectServer(NewIps, &wait) // 判断主机是否通过验证
 	}
 	wait.Wait()
 	return
 }
 
 // connectServer 连接需验证方commandSocket并进行验证
-func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
+func connectServer(ip string, wait *sync.WaitGroup) {
 	defer wait.Done()
 	// 连接指定端口
 	addr := fmt.Sprintf("%s:%d", ip, config.Config.Server.Addr.Port+1)
@@ -200,7 +198,7 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 			switch status {
 			case "success":
 				// 验证成功
-				s.success(ip, string(decryptRemoteID))
+				success(ip, string(decryptRemoteID))
 				return
 			case "fail":
 				// 验证服务端密码失败
@@ -273,7 +271,7 @@ func (s *Scan) connectServer(ip string, wait *sync.WaitGroup) {
 			if err != nil {
 				return
 			}
-			s.success(ip, string(remoteOriginID))
+			success(ip, string(remoteOriginID))
 			return
 
 		} else {

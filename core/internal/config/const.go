@@ -1,8 +1,6 @@
 package config
 
 const (
-	// ConfigPath 配置文件存放路径
-	ConfigPath = ".\\data\\config"
 
 	// SpaceInfoPath EXSync数据存放路径
 	SpaceInfoPath = ".sync\\db"

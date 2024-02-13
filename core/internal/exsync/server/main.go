@@ -6,8 +6,7 @@ import (
 	"EXSync/core/internal/exsync/server/commands"
 	"EXSync/core/internal/exsync/server/commands/ext"
 	"EXSync/core/internal/exsync/server/scan"
-	"EXSync/core/internal/modules/hashext"
-	"EXSync/core/option"
+	serverOption "EXSync/core/option/exsync/server"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"net"
@@ -16,11 +15,11 @@ import (
 )
 
 type Server struct {
-	scan.Scan
-	ConnectManage      map[string]option.ConnectManage
-	StopNewConnections bool
-	mergeSocketDict    map[string]map[string]net.Conn
-	commandSet         *ext.CommandSet
+	ActiveConnectManage  map[string]serverOption.ActiveConnectManage  // 当前主机主动连接远程主机的实例管理
+	PassiveConnectManage map[string]serverOption.PassiveConnectManage // 当前主机被动连接远程主机的实例管理
+	StopNewConnections   bool
+	mergeSocketDict      map[string]map[string]net.Conn
+	commandSet           *ext.CommandSet
 }
 
 func NewServer() *Server {
@@ -29,7 +28,9 @@ func NewServer() *Server {
 
 	// 创建服务实例
 	server := Server{
-		mergeSocketDict: map[string]map[string]net.Conn{},
+		ActiveConnectManage:  make(map[string]serverOption.ActiveConnectManage),
+		PassiveConnectManage: make(map[string]serverOption.PassiveConnectManage),
+		mergeSocketDict:      make(map[string]map[string]net.Conn),
 	}
 
 	// 创建局域网扫描验证服务
@@ -38,7 +39,7 @@ func NewServer() *Server {
 			if server.StopNewConnections {
 				return
 			}
-			server.ScanDevices()
+			scan.ScanDevices()
 			time.Sleep(10 * time.Second)
 		}
 	}()
@@ -91,6 +92,7 @@ func (s *Server) createDataSocket(port int) {
 	}
 }
 
+// verifyCommandSocket 判断对方是否已经通过预扫描验证
 func (s *Server) verifyCommandSocket(commandSocket net.Conn) {
 	defer func(commandSocket net.Conn) {
 		err := commandSocket.Close()
@@ -104,10 +106,10 @@ func (s *Server) verifyCommandSocket(commandSocket net.Conn) {
 		return
 	}
 	logrus.Infof("Starting to verify command socket connection from %s...", host)
-	if hostInfo, ok := s.VerifyManage[host]; ok && hostInfo.AesKey != "" {
+	if hostInfo, ok := scan.VerifyManage[host]; ok && hostInfo.AesKey != "" {
 		// todo: 验证通过处理
 		if dataSocket, ok := s.mergeSocketDict[host]["command"]; ok {
-			go commands.NewCommandProcess(host, dataSocket, commandSocket, &s.VerifyManage)
+			go commands.NewCommandProcess(host, dataSocket, commandSocket, &s.PassiveConnectManage)
 			delete(s.mergeSocketDict, host)
 		} else {
 			s.mergeSocketDict[host] = map[string]net.Conn{
@@ -119,6 +121,7 @@ func (s *Server) verifyCommandSocket(commandSocket net.Conn) {
 	}
 }
 
+// verifyDataSocket 判断对方是否已经通过预扫描验证
 func (s *Server) verifyDataSocket(dataSocket net.Conn) {
 	defer func(dataSocket net.Conn) {
 		err := dataSocket.Close()
@@ -132,10 +135,10 @@ func (s *Server) verifyDataSocket(dataSocket net.Conn) {
 		return
 	}
 	logrus.Infof("Starting to verify data socket connection from %s...", host)
-	if hostInfo, ok := s.VerifyManage[host]; ok && hostInfo.AesKey != "" {
+	if hostInfo, ok := scan.VerifyManage[host]; ok && hostInfo.AesKey != "" {
 		// todo: 验证通过处理
 		if commandSocket, ok := s.mergeSocketDict[host]["command"]; ok {
-			go commands.NewCommandProcess(host, dataSocket, commandSocket, &s.VerifyManage)
+			go commands.NewCommandProcess(host, dataSocket, commandSocket, &s.PassiveConnectManage)
 			delete(s.mergeSocketDict, host)
 		} else {
 			s.mergeSocketDict[host] = map[string]net.Conn{
@@ -150,16 +153,14 @@ func (s *Server) verifyDataSocket(dataSocket net.Conn) {
 // initClient 主动创建客户端连接对方
 // 如果已经预验证，那么直接连接即可通过验证
 func (s *Server) initClient(ip string) {
-	//verifyInfo := s.VerifyManage[ip]
-	//aesKey := verifyInfo.AesKey
-	//remoteID := verifyInfo.RemoteID
-	clientMark := hashext.GetRandomStr(8)
-	c, ok := client.NewClient(clientMark, ip)
+	c, ok := client.NewClient(ip, s.ActiveConnectManage)
 	if ok {
-		s.ConnectManage[ip] = option.ConnectManage{
-			ID:         c.ID,
-			ClientMark: c.ClientMark,
+		s.ActiveConnectManage[ip] = serverOption.ActiveConnectManage{
+			ID:         c.RemoteID,
+			CreateTime: time.Now(),
 			Client:     c,
 		}
+	} else {
+		c.Close()
 	}
 }

@@ -3,17 +3,20 @@ package timechannel
 import (
 	"EXSync/core/internal/config"
 	"errors"
+	"sync"
 	"time"
 )
 
 type TimeChannel struct {
 	channelDict map[string]chan []byte
+	lock        sync.Mutex
 }
 
 // NewTimeChannel 创建一个数据接收队列
 func NewTimeChannel() *TimeChannel {
 	return &TimeChannel{
 		make(map[string]chan []byte),
+		sync.Mutex{},
 	}
 }
 
@@ -79,8 +82,19 @@ func (t *TimeChannel) GetTimeout(mark string, timeout int) (data []byte, err err
 
 // DelKey 释放指定mark的channel对象
 func (t *TimeChannel) DelKey(mark string) {
+	t.lock.Lock()
 	if channel, ok := t.channelDict[mark]; ok {
 		close(channel)
 		delete(t.channelDict, mark)
 	}
+	t.lock.Unlock()
+}
+
+func (t *TimeChannel) Close() {
+	t.lock.Lock()
+	for k, v := range t.channelDict {
+		close(v)
+		delete(t.channelDict, k)
+	}
+	t.lock.Unlock()
 }

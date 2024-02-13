@@ -2,9 +2,9 @@ package config
 
 import (
 	"EXSync/core/internal/modules/hashext"
-	"EXSync/core/option"
-	"EXSync/core/option/server/comm"
+	"EXSync/core/option/config"
 	"encoding/json"
+	"fmt"
 	"github.com/sirupsen/logrus"
 	"net"
 	"os"
@@ -13,12 +13,12 @@ import (
 )
 
 var (
-	Config   = initConfig()
-	UserData = initUserData(Config)
+	Config   = newConfig()
+	UserData = newUserData(Config)
 )
 
-// initConfig 启动时进行初始化读取
-func initConfig() *option.ConfigStruct {
+// NewConfig 启动时进行初始化读取
+func newConfig() *configOption.ConfigStruct {
 	config, err := LoadConfig()
 	if err != nil {
 		return nil
@@ -26,10 +26,10 @@ func initConfig() *option.ConfigStruct {
 	return config
 }
 
-func initUserData(config *option.ConfigStruct) map[string]comm.UdDict {
-	userDataDict := make(map[string]comm.UdDict)
+func newUserData(config *configOption.ConfigStruct) map[string]configOption.UdDict {
+	userDataDict := make(map[string]configOption.UdDict)
 	for _, userdata := range config.Userdata {
-		userDataDict[userdata.Spacename] = comm.UdDict{
+		userDataDict[userdata.Spacename] = configOption.UdDict{
 			Path:      userdata.Path,
 			Interval:  userdata.Interval,
 			Autostart: userdata.Autostart,
@@ -41,17 +41,17 @@ func initUserData(config *option.ConfigStruct) map[string]comm.UdDict {
 }
 
 // LoadConfig 加载Config文件
-func LoadConfig() (result *option.ConfigStruct, err error) {
+func LoadConfig() (result *configOption.ConfigStruct, err error) {
 	err = CreateConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	file, err := os.ReadFile(filepath.Join(configPath, "config.json"))
+	file, err := os.ReadFile(filepath.Join(ConfigPath, "config.json"))
 	if err != nil {
 		return
 	}
-	var config option.ConfigStruct
+	var config configOption.ConfigStruct
 	err = json.Unmarshal(file, &config)
 	if err != nil {
 		return nil, err
@@ -207,7 +207,7 @@ func LoadConfig() (result *option.ConfigStruct, err error) {
 
 // CreateConfig 创建配置文件
 func CreateConfig() (err error) {
-	config := option.ConfigStruct{
+	config := configOption.ConfigStruct{
 		Log: struct {
 			LogLevel string `json:"loglevel"`
 		}{
@@ -316,14 +316,13 @@ func CreateConfig() (err error) {
 	}
 
 	// 创建一个文件
-	configJsonPath := filepath.Join(configPath, "config.json")
-	_, err = os.Stat(configJsonPath)
-	if !os.IsNotExist(err) {
+	configJsonPath := filepath.Join(ConfigPath, "config.json")
+	if _, err = os.Stat(configJsonPath); !os.IsNotExist(err) {
 		return
 	}
-
 	file, err := os.Create(configJsonPath)
 	if err != nil {
+		fmt.Println(err)
 		logrus.Debugf("Error creating config file:%s", err)
 		return
 	}

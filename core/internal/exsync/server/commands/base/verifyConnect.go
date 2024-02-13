@@ -1,5 +1,7 @@
 package base
 
+import "github.com/sirupsen/logrus"
+
 //func (c *Base) VerifyConnect(data map[string]any, mark string) {
 //	defer c.TimeChannel.DelKey(mark) // 释放当前会话
 //	session, err := socket.NewSession(c.TimeChannel, c.DataSocket, nil, mark, nil)
@@ -97,5 +99,31 @@ package base
 //}
 
 func (c *Base) VerifyConnect(data map[string]any, mark string) {
+	remoteVersion, ok := data["version"].(float64)
+	if !ok {
+		return
+	}
+	remoteOffset, ok := data["offset"].(int)
+	if !ok {
+		return
+	}
+	remoteID, ok := data["id"].(string)
+	if !ok {
+		return
+	}
+
+	switch remoteVersion {
+	case 0.1:
+		c.v01()
+	default:
+		logrus.Warningf("Remote host %s uses unsupported verification version %v!", c.Ip, remoteVersion)
+		return
+	}
+
+	return
+}
+
+// v01 0.1 version
+func (c *Base) v01() {
 
 }

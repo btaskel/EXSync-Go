@@ -544,15 +544,63 @@ func main() {
 	//t := time.Now()
 	//fmt.Println(t.Year(), t.Month(), t.Day())
 
-	type Human struct {
-	}
-	human := &Human{}
-	fmt.Println(human)
-	if human == nil {
-		fmt.Println("空")
-	} else {
-		fmt.Println("非空")
-	}
+	//type Human struct {
+	//}
+	//human := &Human{}
+	//fmt.Println(human)
+	//if human == nil {
+	//	fmt.Println("空")
+	//} else {
+	//	fmt.Println("非空")
+	//}
+	//a := 5000
+	//b := 3600
+	//fmt.Println(a / b)
+	//var i *int
+	//fmt.Println(i)
+	//type void struct {
+	//}
+	//fmt.Println(unsafe.Sizeof(make(map[string]void)))
+	//dc := make(map[string]chan string)
+	//dc["abc"] = make(chan string)
+	//delete(dc, "abc")
+	//fmt.Println(dc)
+	//wd, err := os.Getwd()
+	//if err != nil {
+	//	fmt.Println(err)
+	//}
+	//fmt.Println(wd)
+	//
+	//var input string
+	//fmt.Scanln(&input)
+	//
+	//mapL := make(map[string]int)
+	//editMap(mapL)
+	//fmt.Println(mapL)
+	//mapL := Maps{Map: make(map[string]int)}
+	//mapL.editMap()
+	//fmt.Println(mapL)
+	map1 := Maps{Map: make(map[string]int)}
+	map1.editMap()
+	map2 := Maps2{make(map[string]int)}
+	map2.editMap(map1.Map)
+	fmt.Println(map1.Map)
+}
+
+type Maps struct {
+	Map map[string]int
+}
+
+func (m *Maps) editMap() {
+	m.Map["a"] = 5
+}
+
+type Maps2 struct {
+	Map map[string]int
+}
+
+func (m *Maps2) editMap(mapL *map[string]int) {
+	mapL["b"] = 10
 }
 
 //

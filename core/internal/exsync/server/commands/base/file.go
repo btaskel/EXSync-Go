@@ -5,19 +5,20 @@ import (
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/socket"
 	"EXSync/core/option"
-	"EXSync/core/option/server/comm"
+	"EXSync/core/option/exsync/comm"
 	"encoding/json"
 	"fmt"
 	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"io"
+	"net"
 	"os"
 	"path"
 	"sync"
 )
 
-func (c *Base) sendData(file *os.File, fileMark string, dataBlock, total int64) {
+func (c *Base) sendData(file *os.File, fileMark string, dataBlock, total int64) (err error) {
 	// total = 将会读取多少数据 = remoteSize - localSize
 	s, err := socket.NewSession(nil, c.DataSocket, nil, fileMark, c.AesGCM)
 	if err != nil {
@@ -37,10 +38,11 @@ func (c *Base) sendData(file *os.File, fileMark string, dataBlock, total int64) 
 		}
 		err = s.SendDataP(buffer)
 		if err != nil {
-			return
+			return err
 		}
 		readData += dataBlock
 	}
+	return
 }
 
 func (c *Base) GetFile(data map[string]any) {
@@ -70,7 +72,8 @@ func (c *Base) GetFile(data map[string]any) {
 	}
 
 	// 连接数据库
-	spacePath := config.UserData[spaceName].Path
+	space := config.UserData[spaceName]
+	spacePath := space.Path
 	dbPath := path.Join(spacePath, config.SpaceInfoPath, "files.db")
 	sqliteOpen := sqlite.Open(dbPath)
 	db, err := gorm.Open(sqliteOpen, &gorm.Config{})
@@ -139,7 +142,7 @@ func (c *Base) GetFile(data map[string]any) {
 					// 判断为需要续写的文件
 					continueWrite = true
 				} else {
-					continueWrite = true
+					continueWrite = false
 				}
 				command = comm.Command{
 					Command: "",
@@ -156,7 +159,18 @@ func (c *Base) GetFile(data map[string]any) {
 						return
 					}
 					defer f.Close()
-					c.sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
+					err = c.sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
+					if err != nil {
+						netErr, ok := err.(net.Error)
+						if ok && netErr.Timeout() {
+							logrus.Errorf("passive - Sync Space %s :Sending %s file timeout!", space.SpaceName, remoteAbsPath)
+							return
+						} else {
+							logrus.Warningf("passive - Sync Space %s :File %s transfer failed due to unexpected disconnection from host %s.", space.SpaceName, remoteAbsPath, c.Ip)
+							return
+						}
+					}
+
 				}
 
 			} else if file.Size > remoteFileSize && remoteFileSize == 0 {
@@ -166,7 +180,17 @@ func (c *Base) GetFile(data map[string]any) {
 					return
 				}
 				defer f.Close()
-				c.sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
+				err = c.sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
+				if err != nil {
+					netErr, ok := err.(net.Error)
+					if ok && netErr.Timeout() {
+						logrus.Errorf("passive - Sync Space %s :Sending %s file timeout!", space.SpaceName, remoteAbsPath)
+						return
+					} else {
+						logrus.Warningf("passive - Sync Space %s :File %s transfer failed due to unexpected disconnection from host %s.", space.SpaceName, remoteAbsPath, c.Ip)
+						return
+					}
+				}
 			} else if file.Size == remoteFileSize {
 				// 1.文件大小相同，哈希值不同；
 				// 2.本地或远程文件不存在；
@@ -186,6 +210,7 @@ func (c *Base) GetFile(data map[string]any) {
 		go subRoutine(i, &wait)
 	}
 	wait.Wait()
+	logrus.Debugf("passive - Sync Space %s :File a, b begins to transfer")
 }
 
 //// GetFile 客户端从服务端接收数据

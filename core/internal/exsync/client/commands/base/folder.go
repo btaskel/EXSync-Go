@@ -1,9 +1,9 @@
 package base
 
-func (c *Base) GetFolder() {
+func (b *Base) GetFolder() {
 
 }
 
-func (c *Base) PostFolder() {
+func (b *Base) PostFolder() {
 
 }

@@ -1,4 +1,4 @@
-package option
+package configOption
 
 type ConfigStruct struct {
 	Log struct {
@@ -44,4 +44,14 @@ type ConfigStruct struct {
 		Devices   []string `json:"devices"`
 	} `json:"userdata"`
 	Version float64 `json:"version"`
+}
+
+// UdDict UserData
+type UdDict struct {
+	SpaceName string
+	Path      string
+	Interval  int
+	Autostart bool
+	Active    bool
+	Devices   []string
 }

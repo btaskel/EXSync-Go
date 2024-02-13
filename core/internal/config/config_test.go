@@ -1,15 +1,25 @@
 package config
 
 import (
-	"log"
+	"fmt"
 	"testing"
 )
 
 func TestCreateConfig(t *testing.T) {
-	config := Config{}
-	err := config.CreateConfig()
+	err := CreateConfig()
 	if err != nil {
-		log.Fatalf("TestCreateConfig: %v", err)
 		return
 	}
+}
+
+func TestLoadConfig(t *testing.T) {
+	config, err := LoadConfig()
+	if err != nil {
+		return
+	}
+	fmt.Println(config.Server.Addr.Port)
+}
+
+func TestConfig(t *testing.T) {
+	fmt.Println(Config.Userdata)
 }

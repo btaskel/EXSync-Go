@@ -6,7 +6,9 @@ import (
 	"EXSync/core/internal/modules/pathext"
 	"EXSync/core/internal/modules/socket"
 	"EXSync/core/option"
-	"EXSync/core/option/server/comm"
+	configOption "EXSync/core/option/config"
+	"EXSync/core/option/exsync/comm"
+	"errors"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"os"
@@ -18,7 +20,7 @@ import (
 // relPaths的数量将决定以多少并发获取文件
 // 如果本地文件是待续写文件，将会续写
 // 如果本地文件不存在，将会创建
-func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDict) (ok bool, err error) {
+func (b *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space configOption.UdDict) (ok bool, err error) {
 	// 初始化GetFile
 	var (
 		hashList      []string
@@ -67,7 +69,7 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 			"spaceName":     space.SpaceName,
 		},
 	}
-	session, err := socket.NewSession(c.TimeChannel, nil, c.CommandSocket, hashext.GetRandomStr(8), c.AesGCM)
+	session, err := socket.NewSession(b.TimeChannel, nil, b.CommandSocket, hashext.GetRandomStr(8), b.AesGCM)
 	if err != nil {
 		return false, err
 	}
@@ -78,7 +80,7 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 	}
 
 	// 初始化传输
-	dataBlock := int64(config.PacketSize - 8 - c.EncryptionLoss)
+	dataBlock := int64(config.PacketSize - 8 - b.EncryptionLoss)
 
 	// 单文件传输线程
 	subRoutine := func(i int, wait *sync.WaitGroup) {
@@ -100,7 +102,7 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 		filePath := path.Join(space.Path, outPath)
 
 		// 创建会话接收首次答复
-		s, err := socket.NewSession(c.TimeChannel, c.DataSocket, nil, replyMark, c.AesGCM)
+		s, err := socket.NewSession(b.TimeChannel, b.DataSocket, nil, replyMark, b.AesGCM)
 		defer s.Close()
 		if err != nil {
 			return
@@ -118,7 +120,7 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 		remoteFileHash, ok := reply.Data["hash"].(string)
 
 		if remoteFileSize == 0 {
-			logrus.Errorf("Client GetFile GetFile: File %s failed to retrieve from host %s", filePath, c.Ip)
+			logrus.Errorf("active Client GetFile: File %s failed to retrieve from host %s", filePath, b.Ip)
 			return
 		}
 
@@ -143,9 +145,13 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 				}
 				defer f.Close()
 				for {
-					result, err := c.TimeChannel.Get(fileMark)
+					result, err := b.TimeChannel.GetTimeout(fileMark, config.SocketTimeout)
 					if err != nil {
-						logrus.Errorf("subRoutine: Timed out while reading data")
+						if err == errors.New("timeout") {
+							logrus.Errorf("active Sync Space %s :Receiving %s file timeout!", space.SpaceName, filePath)
+						} else {
+							logrus.Errorf("active Sync Space %s :Unknown error receiving %s file from host %s", space.SpaceName, filePath, b.Ip)
+						}
 						return
 					}
 					_, err = f.Write(result)
@@ -168,9 +174,13 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 				}
 				defer f.Close()
 				for {
-					result, err := c.TimeChannel.Get(fileMark)
+					result, err := b.TimeChannel.GetTimeout(fileMark, config.SocketTimeout)
 					if err != nil {
-						logrus.Errorf("subRoutine: Timed out while reading data")
+						if err == errors.New("timeout") {
+							logrus.Errorf("active Sync Space %s :Receiving %s file timeout!", space.SpaceName, filePath)
+						} else {
+							logrus.Errorf("active Sync Space %s :Unknown error receiving %s file from host %s", space.SpaceName, filePath, b.Ip)
+						}
 						return
 					}
 					_, err = f.Write(result)
@@ -204,6 +214,7 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 	}
 
 	// 开始传输
+	logrus.Debugf("active Sync Space %s :File %s begins to transfer", space.SpaceName, relPaths)
 	var wait sync.WaitGroup
 	fileCount := len(relPaths)
 	wait.Add(fileCount)
@@ -211,10 +222,10 @@ func (c *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space comm.UdDi
 		go subRoutine(i, &wait)
 	}
 	wait.Wait()
-
+	logrus.Debugf("active Sync Space %s :File %s transfer completed", space.SpaceName, relPaths)
 	return
 }
 
-func (c *Base) PostFile() {
+func (b *Base) PostFile() {
 
 }

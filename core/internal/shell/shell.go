@@ -1,4 +1,4 @@
-package option
+package shell
 
 import (
 	"github.com/sirupsen/logrus"
