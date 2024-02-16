@@ -580,28 +580,53 @@ func main() {
 	//mapL := Maps{Map: make(map[string]int)}
 	//mapL.editMap()
 	//fmt.Println(mapL)
-	map1 := Maps{Map: make(map[string]int)}
-	map1.editMap()
-	map2 := Maps2{make(map[string]int)}
-	map2.editMap(map1.Map)
-	fmt.Println(map1.Map)
+	//map1 := Maps{Map: make(map[string]int)}
+	//map1.editMap()
+	//map2 := Maps2{make(map[string]int)}
+	//map2.editMap(map1.Map)
+	//fmt.Println(map1.Map)
+	//fmt.Println(os.Getwd())
+	//f, err := os.Open("test\\test1.go")
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//seek, err := f.Seek(1000, 1)
+	//if err != nil {
+	//	return
+	//}
+	//fmt.Println(seek)
+	//buf := make([]byte, 4096)
+	//n, err := f.Read(buf)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//fmt.Println(string(buf[:n]))
+	m := map[string]any{}
+	stat, ok := m["stat"].(string)
+	if ok {
+		fmt.Println("ok")
+		fmt.Println(stat)
+	}
 }
 
-type Maps struct {
-	Map map[string]int
-}
-
-func (m *Maps) editMap() {
-	m.Map["a"] = 5
-}
-
-type Maps2 struct {
-	Map map[string]int
-}
-
-func (m *Maps2) editMap(mapL *map[string]int) {
-	mapL["b"] = 10
-}
+//
+//type Maps struct {
+//	Map map[string]int
+//}
+//
+//func (m *Maps) editMap() {
+//	m.Map["a"] = 5
+//}
+//
+//type Maps2 struct {
+//	Map map[string]int
+//}
+//
+//func (m *Maps2) editMap(mapL *map[string]int) {
+//	mapL["b"] = 10
+//}
 
 //
 //func test(i int) {

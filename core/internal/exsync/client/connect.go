@@ -2,7 +2,6 @@ package client
 
 import (
 	"EXSync/core/internal/config"
-	"EXSync/core/internal/exsync/server/scan"
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/socket"
 	"EXSync/core/option/exsync/comm"
@@ -230,15 +229,17 @@ func (c *Client) connectRemoteCommandSocket() (ok bool, err error) {
 				"version": config.Config.Version, // 当前版本
 				"offset":  offset / 3600,         // 当前时区
 				"id":      c.LocalID,             // 返回当前主机的id标识
+				"hash":    hashext.GetSha384(config.Config.Server.Addr.Password),
+				//"stat":    "",                    // 对于上个请求的状态反馈
 			},
 		}
 		replyMark := hashext.GetRandomStr(8)
-		session, err := socket.NewSession(c.TimeChannel, nil, c.commandSocket, replyMark, c.aesGcm)
+		s, err := socket.NewSession(c.TimeChannel, nil, c.commandSocket, replyMark, c.aesGcm)
 		if err != nil {
 			return false
 		}
-		defer session.Close()
-		command, err := session.SendCommand(reply, true, true)
+		defer s.Close()
+		command, err := s.SendCommand(reply, true, true)
 		if err != nil {
 			return false
 		}
@@ -246,16 +247,21 @@ func (c *Client) connectRemoteCommandSocket() (ok bool, err error) {
 		if !ok {
 			return false
 		}
-		permissions, ok := command["permissions"].(map[string]struct{}) // r 读取; w 写入; e执行;
+		remotePermissions, ok := command["permissions"].(map[string]struct{}) // r 读取; w 写入; e执行;
+		if !ok {
+			return false
+		}
+		remoteOffset, ok := command["offset"].(int)
 		if !ok {
 			return false
 		}
 
 		c.RemoteID = remoteID
-		scan.VerifyManage[c.IP] = serverOption.VerifyManage{
+		c.VerifyManage[c.IP] = serverOption.VerifyManage{
 			AesKey:      config.Config.Server.Addr.Password,
 			RemoteID:    remoteID,
-			Permissions: permissions,
+			Offset:      remoteOffset * 3600,
+			Permissions: remotePermissions,
 		}
 		return true
 	}

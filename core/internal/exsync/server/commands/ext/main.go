@@ -5,6 +5,7 @@ import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
 	"EXSync/core/option/exsync/comm"
+	serverOption "EXSync/core/option/exsync/server"
 	"net"
 )
 
@@ -14,7 +15,7 @@ type CommandSet struct {
 
 // NewCommandSet 创建扩展指令集对象
 func NewCommandSet(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket net.Conn, AesGCM *encryption.Gcm,
-	EncryptionLoss int) (commandSet *CommandSet, err error) {
+	EncryptionLoss int, verifyManage map[string]serverOption.VerifyManage) (commandSet *CommandSet, err error) {
 	addr := commandSocket.RemoteAddr().String()
 	ip, _, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -28,6 +29,7 @@ func NewCommandSet(timeChannel *timechannel.TimeChannel, dataSocket, commandSock
 		CommandSocket:  commandSocket,
 		AesGCM:         AesGCM,
 		EncryptionLoss: EncryptionLoss,
+		VerifyManage:   verifyManage,
 	}}
 
 	return &c, err

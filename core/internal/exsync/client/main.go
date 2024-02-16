@@ -23,11 +23,12 @@ type Client struct {
 	IP, LocalID, RemoteID     string
 	Comm                      *ext.CommandSet
 	ActiveConnectManage       map[string]serverOption.ActiveConnectManage
+	VerifyManage              map[string]serverOption.VerifyManage
 	aesGcm                    *encryption.Gcm
 	commandSocket, dataSocket net.Conn
 }
 
-func NewClient(ip string, activeConnectManage map[string]serverOption.ActiveConnectManage) (*Client, bool) {
+func NewClient(ip string, activeConnectManage map[string]serverOption.ActiveConnectManage, verifyManage map[string]serverOption.VerifyManage) (*Client, bool) {
 	// 初始化AES-GCM
 	var gcm *encryption.Gcm
 	var err error
@@ -41,6 +42,7 @@ func NewClient(ip string, activeConnectManage map[string]serverOption.ActiveConn
 
 	// 初始化独立的TimeChannel
 	timeChannel := timechannel.NewTimeChannel()
+	defer timeChannel.Close()
 
 	// 初始化Client实例
 	client := &Client{
@@ -48,6 +50,7 @@ func NewClient(ip string, activeConnectManage map[string]serverOption.ActiveConn
 		LocalID:             config.Config.Server.Addr.ID,
 		TimeChannel:         timeChannel,
 		ActiveConnectManage: activeConnectManage,
+		VerifyManage:        verifyManage,
 		aesGcm:              gcm,
 	}
 

@@ -1,6 +1,14 @@
 package base
 
-import "github.com/sirupsen/logrus"
+import (
+	"EXSync/core/internal/config"
+	"EXSync/core/internal/modules/hashext"
+	"EXSync/core/internal/modules/socket"
+	"EXSync/core/option/exsync/comm"
+	serverOption "EXSync/core/option/exsync/server"
+	"github.com/sirupsen/logrus"
+	"time"
+)
 
 //func (c *Base) VerifyConnect(data map[string]any, mark string) {
 //	defer c.TimeChannel.DelKey(mark) // 释放当前会话
@@ -99,22 +107,38 @@ import "github.com/sirupsen/logrus"
 //}
 
 func (c *Base) VerifyConnect(data map[string]any, mark string) {
+	s, err := socket.NewSession(c.TimeChannel, c.DataSocket, nil, mark, c.AesGCM)
+	if err != nil {
+		return
+	}
+	defer s.Close()
+
 	remoteVersion, ok := data["version"].(float64)
 	if !ok {
+		socket.SendStat(s, "VerifyConnect: Missing parameter <version> during connection verification")
 		return
 	}
 	remoteOffset, ok := data["offset"].(int)
 	if !ok {
+		socket.SendStat(s, "VerifyConnect: Missing parameter <offset> during connection verification")
 		return
+	} else if remoteOffset > 12 || remoteOffset < -12 {
+		socket.SendStat(s, "VerifyConnect: <offset> exceeding 12 or less than -12")
+		return
+	}
+	remoteHash, ok := data["hash"].(string)
+	if !ok {
+		socket.SendStat(s, "VerifyConnect: Missing parameter <hash> during connection verification")
 	}
 	remoteID, ok := data["id"].(string)
 	if !ok {
+		socket.SendStat(s, "VerifyConnect: Missing parameter <remoteID> during connection verification")
 		return
 	}
 
 	switch remoteVersion {
 	case 0.1:
-		c.v01()
+		c.v01(s, remoteOffset, remoteID, remoteHash)
 	default:
 		logrus.Warningf("Remote host %s uses unsupported verification version %v!", c.Ip, remoteVersion)
 		return
@@ -124,6 +148,36 @@ func (c *Base) VerifyConnect(data map[string]any, mark string) {
 }
 
 // v01 0.1 version
-func (c *Base) v01() {
+func (c *Base) v01(s *socket.Session, remoteOffset int, remoteID, remoteHash string) {
+	offset := remoteOffset * 3600
+	if remoteHash != hashext.GetSha384(config.Config.Server.Addr.Password) {
+		socket.SendStat(s, "VerifyConnect: Identity verification failed!")
+		return
+	}
+	_, localOffset := time.Now().Zone()
+	command := comm.Command{
+		Command: "",
+		Type:    "",
+		Method:  "",
+		Data: map[string]any{
+			"id":          config.Config.Server.Addr.ID,
+			"permissions": map[string]struct{}{"r": {}, "w": {}},
+			"offset":      localOffset / 3600,
+		},
+	}
 
+	_, err := s.SendCommand(command, false, true)
+	if err != nil {
+		return
+	}
+
+	c.VerifyManage[c.Ip] = serverOption.VerifyManage{
+		AesKey:   config.Config.Server.Addr.Password,
+		RemoteID: remoteID,
+		Offset:   offset,
+		Permissions: map[string]struct{}{
+			"r": {},
+			"w": {},
+		},
+	}
 }

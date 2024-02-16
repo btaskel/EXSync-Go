@@ -3,7 +3,7 @@ package base
 import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
-	"EXSync/core/option"
+	serverOption "EXSync/core/option/exsync/server"
 	"net"
 )
 
@@ -12,7 +12,7 @@ type Base struct {
 	TimeChannel               *timechannel.TimeChannel
 	DataSocket, CommandSocket net.Conn
 	AesGCM                    *encryption.Gcm
-	VerifyManage              *map[string]option.VerifyManage
+	VerifyManage              map[string]serverOption.VerifyManage
 
 	//block          uint
 	EncryptionLoss int

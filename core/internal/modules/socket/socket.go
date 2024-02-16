@@ -158,80 +158,18 @@ func (s *Session) SendData(data []byte) (err error) {
 
 // SendDataP SendData的性能版本
 func (s *Session) SendDataP(data []byte) (err error) {
-	byteData, err := s.aesGCM.AesGcmEncrypt(append(s.mark, data...))
+	var byteData []byte
+	if s.aesGCM == nil {
+		byteData = append(s.mark, data...)
+	} else {
+		byteData, err = s.aesGCM.AesGcmEncrypt(append(s.mark, data...))
+	}
 	_, err = s.dataSocket.Write(byteData)
 	if err != nil {
 		logrus.Warningf("SendDataP: Sending data to %s timeout", err)
 	}
 	return
 }
-
-//// Send 如果发送为[]byte类型，则立即发送
-//// 如果发送为map[string]interface{}类型，则立即发送
-//func (s *Session) Send(data any, output bool) (result map[string]any, err error) {
-//	switch data.(type) {
-//	case map[string]any, map[string]string:
-//		v := data.(map[string]any)
-//		switch s.method {
-//		case 0:
-//			var conn net.Conn
-//			if s.count == 0 {
-//				conn = s.commandSocket
-//			} else {
-//				conn = s.dataSocket
-//			}
-//			return s.sendTimeDict(conn, v, output)
-//		case 1:
-//			return s.sendTimeDict(s.dataSocket, v, output)
-//		case 2:
-//			return s.sendNoTimeDict(s.commandSocket, v, output)
-//		}
-//		panic("错误的Session发送方法")
-//	case []byte:
-//		v := data.([]byte)
-//		if s.aesGCM != nil {
-//			if len(v) > 4060 {
-//				panic("sendNoTimeDict: 指令发送时大于4060个字节")
-//			} else if len(v) < 36 {
-//				panic("sendNoTimeDict: 指令发送时无字节")
-//			}
-//			byteData, err := s.aesGCM.AesGcmEncrypt(append(s.mark, v...))
-//			if err != nil {
-//				return nil, err
-//			}
-//			_, err = s.dataSocket.Write(byteData)
-//			if err != nil {
-//				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-//					logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
-//					return nil, err
-//				} else {
-//					return nil, err
-//				}
-//			}
-//			return nil, nil
-//		} else {
-//			if len(v) > 4088 {
-//				panic("sendNoTimeDict: 指令发送时大于4088个字节")
-//			} else if len(v) <= 8 {
-//				panic("sendNoTimeDict: 指令发送时无字节")
-//			}
-//			byteData := append(s.mark, v...)
-//			_, err := s.dataSocket.Write(byteData)
-//			if err != nil {
-//				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-//					logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
-//					return nil, err
-//				} else {
-//					return nil, err
-//				}
-//			}
-//			return nil, nil
-//		}
-//
-//	default:
-//		panic("错误的Session发送类型")
-//	}
-//}
 
 // sendNoTimeDict 发送数据绕过TimeDict/TimeChannel
 func (s *Session) sendNoTimeDict(conn net.Conn, data []byte, output bool) (map[string]any, error) {
@@ -296,6 +234,11 @@ func (s *Session) sendTimeDict(conn net.Conn, command []byte, output bool) (map[
 				return nil, err
 			}
 			s.count += 1
+			remoteStat, ok := decodeData["stat"].(string)
+			if ok {
+				logrus.Errorf("%s - %s", s.dataSocket.RemoteAddr().String(), remoteStat)
+				return nil, errors.New("error from remote")
+			}
 			return decodeData, nil
 		} else {
 			return nil, err
