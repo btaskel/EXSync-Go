@@ -63,7 +63,6 @@ func (s *Server) verifyCommandSocket(commandSocket net.Conn) {
 	}
 	logrus.Infof("Starting to verify command socket connection from %s...", host)
 	if hostInfo, ok := VerifyManage[host]; ok && hostInfo.AesKey != "" {
-		// todo: 验证通过处理
 		if dataSocket, ok := s.mergeSocketDict[host]["command"]; ok {
 			go commands.NewCommandProcess(host, dataSocket, commandSocket, &s.PassiveConnectManage)
 			delete(s.mergeSocketDict, host)
@@ -92,7 +91,6 @@ func (s *Server) verifyDataSocket(dataSocket net.Conn) {
 	}
 	logrus.Infof("Starting to verify data socket connection from %s...", host)
 	if hostInfo, ok := VerifyManage[host]; ok && hostInfo.AesKey != "" {
-		// todo: 验证通过处理
 		if commandSocket, ok := s.mergeSocketDict[host]["command"]; ok {
 			go commands.NewCommandProcess(host, dataSocket, commandSocket, &s.PassiveConnectManage)
 			delete(s.mergeSocketDict, host)

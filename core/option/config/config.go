@@ -1,5 +1,7 @@
 package configOption
 
+import "database/sql"
+
 type ConfigStruct struct {
 	Log struct {
 		LogLevel string `json:"loglevel"`
@@ -53,5 +55,6 @@ type UdDict struct {
 	Interval  int
 	Autostart bool
 	Active    bool
+	Db        *sql.DB
 	Devices   []string
 }

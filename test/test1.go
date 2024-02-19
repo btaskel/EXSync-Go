@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 )
 
 type Config struct {
@@ -603,13 +604,73 @@ func main() {
 	//	return
 	//}
 	//fmt.Println(string(buf[:n]))
-	m := map[string]any{}
-	stat, ok := m["stat"].(string)
-	if ok {
-		fmt.Println("ok")
-		fmt.Println(stat)
+	//m := map[string]any{}
+	//stat, ok := m["stat"].(string)
+	//if ok {
+	//	fmt.Println("ok")
+	//	fmt.Println(stat)
+	//}
+	//_ = NewT()
+	//time.Sleep(3 * time.Second)
+	//fmt.Println(t.Name)
+
+	//fmt.Println(time.Now().Unix())
+	//
+	var t int64 = 1708339242
+	unix := time.Unix(t, 0)
+
+	path := "test\\test.txt"
+	data := []byte{10, 50, 100, 255}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0776)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	var i int
+	for {
+		if i == 4 {
+			return
+		}
+		buf := []byte{data[i]}
+		if i == 0 {
+			err = os.Chtimes(path, unix, unix)
+			if err != nil {
+				fmt.Println(err)
+			}
+		}
+		_, err = f.Write(buf)
+		if err != nil {
+			return
+		}
+		i++
 	}
 }
+
+//func server() {
+//	listener, err := net.Listen("tcp")
+//	if err != nil {
+//		return
+//	}
+//	conn, err := listener.Accept()
+//	if err != nil {
+//		return
+//	}
+//}
+
+//func threading() {
+//	time.Sleep(2 * time.Second)
+//	fmt.Println("over")
+//}
+//
+//type Test struct {
+//	Name int
+//}
+//
+//func NewT() *Test {
+//	go threading()
+//	go threading()
+//	return &Test{}
+//}
 
 //
 //type Maps struct {

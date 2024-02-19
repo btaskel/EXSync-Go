@@ -5,12 +5,11 @@ import (
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/pathext"
 	"EXSync/core/internal/modules/socket"
-	"EXSync/core/option"
+	"EXSync/core/internal/modules/sqlt"
 	configOption "EXSync/core/option/config"
 	"EXSync/core/option/exsync/comm"
 	"errors"
 	"github.com/sirupsen/logrus"
-	"gorm.io/gorm"
 	"os"
 	"path"
 	"sync"
@@ -20,7 +19,7 @@ import (
 // relPaths的数量将决定以多少并发获取文件
 // 如果本地文件是待续写文件，将会续写
 // 如果本地文件不存在，将会创建
-func (b *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space configOption.UdDict) (ok bool, err error) {
+func (b *Base) GetFile(relPaths, outPaths []string, space configOption.UdDict) (failedFiles []string, err error) {
 	// 初始化GetFile
 	var (
 		hashList      []string
@@ -36,10 +35,14 @@ func (b *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space configOpt
 	}
 
 	for _, relPath := range relPaths {
-		var file option.Index
 		fileMark := hashext.GetRandomStr(8)
 		replyMark := hashext.GetRandomStr(8)
-		db.Where("path = ?", relPath).First(&file)
+		//db.Where("path = ?", relPath).First(&file)
+		file, err := sqlt.QueryFile(space.Db, relPath)
+		if err != nil {
+			logrus.Errorf("Active GetFile: Error querying information for file %s!", relPath)
+			failedFiles = append(failedFiles, relPath)
+		}
 		fileStat, err := os.Stat(path.Join(space.Path, relPath))
 		if err == nil {
 			fs := fileStat.Size()
@@ -71,12 +74,12 @@ func (b *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space configOpt
 	}
 	session, err := socket.NewSession(b.TimeChannel, nil, b.CommandSocket, hashext.GetRandomStr(8), b.AesGCM)
 	if err != nil {
-		return false, err
+		return relPaths, err
 	}
 	defer session.Close()
 	_, err = session.SendCommand(command, false, true)
 	if err != nil {
-		return false, err
+		return relPaths, err
 	}
 
 	// 初始化传输
@@ -173,6 +176,7 @@ func (b *Base) GetFile(relPaths, outPaths []string, db *gorm.DB, space configOpt
 					return
 				}
 				defer f.Close()
+				// 启用缓存
 				for {
 					result, err := b.TimeChannel.GetTimeout(fileMark, config.SocketTimeout)
 					if err != nil {

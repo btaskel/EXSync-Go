@@ -1,4 +1,4 @@
-package option
+package index
 
 import "gorm.io/gorm"
 
@@ -6,7 +6,9 @@ type Index struct {
 	gorm.Model
 	Path string
 	Type string
-	Hash string
+
+	Hash      string
+	HashBlock string
 
 	SystemDate int64
 	EditDate   int64
@@ -21,4 +23,15 @@ type Index struct {
 type Status struct {
 	gorm.Model
 	exclude bool
+}
+
+type File struct {
+	ID         int
+	Path       string
+	Size       int64
+	Hash       string
+	HashBlock  string
+	SystemDate int64
+	EditDate   int64
+	CreateDate int64
 }

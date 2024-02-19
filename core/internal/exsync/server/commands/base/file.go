@@ -4,8 +4,8 @@ import (
 	"EXSync/core/internal/config"
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/socket"
-	"EXSync/core/option"
 	"EXSync/core/option/exsync/comm"
+	"EXSync/core/option/exsync/index"
 	"encoding/json"
 	"fmt"
 	"github.com/glebarez/sqlite"
@@ -98,7 +98,7 @@ func (c *Base) GetFile(data map[string]any) {
 		}
 		defer session.Close()
 
-		var file option.Index
+		var file index.Index
 		db.Where("path = ?", remoteRelPath).First(&file)
 
 		command := comm.Command{
@@ -424,7 +424,7 @@ func (c *Base) PostFile(data map[string]any, replyMark string, db *gorm.DB) {
 	//	logrus.Errorf("Host %s failed to open the index database for %s!", c.Ip, remoteSpace)
 	//}
 
-	var file option.Index
+	var file index.Index
 	var command comm.Command
 	db.Where("Path = ?", remoteFileRelPath).First(&file)
 	//spaceIndex.First(&indexOption, "code = ?", "D42")

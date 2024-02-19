@@ -3,11 +3,14 @@ package config
 import (
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/option/config"
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	_ "github.com/glebarez/go-sqlite"
 	"github.com/sirupsen/logrus"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -26,14 +29,66 @@ func newConfig() *configOption.ConfigStruct {
 	return config
 }
 
+// newUserData 遍历所有同步空间，并创建数据库文件与对象
 func newUserData(config *configOption.ConfigStruct) map[string]configOption.UdDict {
 	userDataDict := make(map[string]configOption.UdDict)
 	for _, userdata := range config.Userdata {
+		savePath := path.Join(userdata.Path, SpaceInfoPath)
+		var db *sql.DB
+		// 如果同步空间不存在db存储文件夹则创建文件夹
+		if _, err := os.Stat(savePath); os.IsNotExist(err) {
+			err = os.MkdirAll(savePath, 0755)
+			if err != nil {
+				logrus.Fatalf("newUserData: Failed to create index for syncspace %s! %s", userdata.Spacename, err)
+				os.Exit(1)
+			}
+		}
+
+		// 打开数据库，存储数据库对象
+		db, err := sql.Open("sqlite", path.Join(savePath, "sync.db"))
+		if err != nil {
+			logrus.Fatalf("newUserData: Failed to open database %s! %s", userdata.Spacename, err)
+			os.Exit(1)
+		}
+
+		// 创建表
+		row := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", "sync")
+		var name string
+		switch err = row.Scan(&name); err {
+		case sql.ErrNoRows:
+			// 表不存在
+			createTable := `CREATE TABLE IF NOT EXISTS sync (
+			    id INTEGER PRIMARY KEY,
+			    path TEXT,
+			    size INTEGER,
+				hash TEXT,
+				hashBlock TEXT,
+				sysDate INTEGER,
+				editDate INTEGER,
+				createDate INTEGER
+			)`
+			statement, err := db.Prepare(createTable)
+			if err != nil {
+				logrus.Fatalf("newUserData: Failed to create file index table for synchronization space %s! %s", userdata.Spacename, err)
+				os.Exit(1)
+			}
+			_, err = statement.Exec()
+			if err != nil {
+				logrus.Fatalf("newUserData: Failed to create file index table for synchronization space %s! %s", userdata.Spacename, err)
+				os.Exit(1)
+			}
+		case nil:
+			// 表存在
+		default:
+			logrus.Fatal(err)
+		}
+
 		userDataDict[userdata.Spacename] = configOption.UdDict{
 			Path:      userdata.Path,
 			Interval:  userdata.Interval,
 			Autostart: userdata.Autostart,
 			Active:    userdata.Active,
+			Db:        db,
 			Devices:   userdata.Devices,
 		}
 	}
