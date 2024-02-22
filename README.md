@@ -13,7 +13,7 @@
 
 当前项目贡献者：
 
-    Bt（Bt_Asker）
+    Bt（Bt_Asker）shallow-zzt （Sha110w_4qua）
 
 **状态：制作中未完成, 而且也没有test**
 
