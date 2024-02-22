@@ -4,11 +4,11 @@ import (
 	"EXSync/core/internal/config"
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/socket"
+	"EXSync/core/internal/modules/sqlt"
 	"EXSync/core/option/exsync/comm"
 	"EXSync/core/option/exsync/index"
 	"encoding/json"
 	"fmt"
-	"github.com/glebarez/sqlite"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"io"
@@ -74,12 +74,7 @@ func (c *Base) GetFile(data map[string]any) {
 	// 连接数据库
 	space := config.UserData[spaceName]
 	spacePath := space.Path
-	dbPath := path.Join(spacePath, config.SpaceInfoPath, "files.db")
-	sqliteOpen := sqlite.Open(dbPath)
-	db, err := gorm.Open(sqliteOpen, &gorm.Config{})
-	if err != nil {
-		return
-	}
+	db := space.Db
 
 	dataBlock := int64(config.PacketSize - 8 - c.EncryptionLoss)
 
@@ -98,17 +93,27 @@ func (c *Base) GetFile(data map[string]any) {
 		}
 		defer session.Close()
 
-		var file index.Index
-		db.Where("path = ?", remoteRelPath).First(&file)
+		var stat string
+		file, err := sqlt.QueryFile(db, remoteRelPath)
+		if err != nil {
+			stat = "Passive-GetFile: QueryFile Error!"
+		}
 
-		command := comm.Command{
-			Command: "",
-			Type:    "",
-			Method:  "",
-			Data: map[string]any{
-				"size": file.Size,
-				"hash": file.Hash,
-			},
+		// 发送异常或者文件信息
+		var command comm.Command
+		if len(stat) != 0 {
+			command = comm.Command{
+				Data: map[string]any{
+					"size": file.Size,
+					"hash": file.Hash,
+				},
+			}
+		} else {
+			command = comm.Command{
+				Data: map[string]any{
+					"stat": stat,
+				},
+			}
 		}
 		_, err = session.SendCommand(command, false, true)
 		if err != nil {

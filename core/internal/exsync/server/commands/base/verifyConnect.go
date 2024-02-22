@@ -115,24 +115,24 @@ func (c *Base) VerifyConnect(data map[string]any, mark string) {
 
 	remoteVersion, ok := data["version"].(float64)
 	if !ok {
-		socket.SendStat(s, "VerifyConnect: Missing parameter <version> during connection verification")
+		socket.SendStat(s, "Passive-VerifyConnect: Missing parameter <version> during connection verification")
 		return
 	}
 	remoteOffset, ok := data["offset"].(int)
 	if !ok {
-		socket.SendStat(s, "VerifyConnect: Missing parameter <offset> during connection verification")
+		socket.SendStat(s, "Passive-VerifyConnect: Missing parameter <offset> during connection verification")
 		return
 	} else if remoteOffset > 12 || remoteOffset < -12 {
-		socket.SendStat(s, "VerifyConnect: <offset> exceeding 12 or less than -12")
+		socket.SendStat(s, "Passive-VerifyConnect: <offset> exceeding 12 or less than -12")
 		return
 	}
 	remoteHash, ok := data["hash"].(string)
 	if !ok {
-		socket.SendStat(s, "VerifyConnect: Missing parameter <hash> during connection verification")
+		socket.SendStat(s, "Passive-VerifyConnect: Missing parameter <hash> during connection verification")
 	}
 	remoteID, ok := data["id"].(string)
 	if !ok {
-		socket.SendStat(s, "VerifyConnect: Missing parameter <remoteID> during connection verification")
+		socket.SendStat(s, "Passive-VerifyConnect: Missing parameter <remoteID> during connection verification")
 		return
 	}
 

@@ -11,7 +11,7 @@ func QueryFile(db *sql.DB, path string) (f *index.File, err error) {
 	file := index.File{}
 	err = row.Scan(&file.ID, &file.Path, &file.Size, &file.Hash, &file.HashBlock, &file.SystemDate, &file.EditDate, &file.CreateDate)
 	if err != nil {
-		return
+		return nil, err
 	}
 	return &file, nil
 }
