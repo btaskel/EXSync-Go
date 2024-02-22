@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"strconv"
 )
 
 var IphalfStr []string
@@ -51,7 +52,17 @@ func AddressProcessing(ip string) error {
 		//debugLog.Print("检查地址错误！")
 		return errors.New("检查地址错误！")
 	}
+	num, err := strconv.Atoi(a[0])
+	if err != nil {
+		return err
+	}
+
 	host := fmt.Sprintf("%s.%s.%s", a[0], a[1], a[2])
+	if num >= 128 && num < 192 {
+		host = fmt.Sprintf("%s.%s", a[0], a[1])
+	} else if num < 128 {
+		host = fmt.Sprintf("%s", a[0])
+	}
 	//debugLog.Print("获取本机地址:", ip, "------->  处理为网段:", host)
 	IphalfStr = append(IphalfStr, host)
 	return nil
