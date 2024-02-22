@@ -616,6 +616,24 @@ func main() {
 
 	//fmt.Println(time.Now().Unix())
 	//
+	//m := map[string]any{}
+	//m["a"] = "asss"
+	//
+	//hash, _ := m["b"].(string)
+	//fmt.Println(hash)
+	//writeFile()
+	type file struct {
+		Name string
+		Age  int
+	}
+	a := file{
+		//Name: "ss",
+		Age: 5,
+	}
+	fmt.Println(len(a.Name))
+}
+
+func writeFile() {
 	var t int64 = 1708339242
 	unix := time.Unix(t, 0)
 
@@ -632,15 +650,13 @@ func main() {
 			return
 		}
 		buf := []byte{data[i]}
-		if i == 0 {
-			err = os.Chtimes(path, unix, unix)
-			if err != nil {
-				fmt.Println(err)
-			}
-		}
 		_, err = f.Write(buf)
 		if err != nil {
 			return
+		}
+		err = os.Chtimes(path, unix, unix)
+		if err != nil {
+			fmt.Println(err)
 		}
 		i++
 	}

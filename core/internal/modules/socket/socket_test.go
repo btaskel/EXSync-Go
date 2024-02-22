@@ -133,11 +133,11 @@ func TestSession_SendCommand(t *testing.T) {
 		}
 		defer conn.Close()
 		session, err := NewSession(tc, conn, nil, "12345678", nil)
-		result, ok := session.Recv()
-		if !ok {
+		result, err := session.Recv()
+		if err != nil {
 			fmt.Println("c2:", err)
 		}
-		flag, ok := result.Data["flag"].(bool)
+		flag, _ := result.Data["flag"].(bool)
 		fmt.Println("server答复标识: ", flag) //
 		command := comm.Command{
 			Command: "abc",

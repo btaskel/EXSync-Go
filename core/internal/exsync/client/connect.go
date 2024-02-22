@@ -245,6 +245,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool, err error) {
 		}
 		remoteID, ok := command["id"].(string)
 		if !ok {
+			socket.SendStat(s, "connectRemoteCommandSocket: ")
 			return false
 		}
 		remotePermissions, ok := command["permissions"].(map[string]struct{}) // r 读取; w 写入; e执行;

@@ -26,34 +26,39 @@ type Session struct {
 //	data_socket & command_socket:
 //	SocketSession会根据传入了哪些形参而确定会话方法
 //	1: 当data, command都未传入, 将抛出异常;
-//	2: 当data传入, command为空, 将会只按data_socket进行收发，不会经过对方的指令处理;
+//	2: 当data传入, command为空, 将会只按data_socket进行收发，不会经过对方的命令处理;
 //	3: 当command传入, data为空，将会按照sendCommandNoTimedict()进行对话(特殊用途);
-//	4: 当data, command都传入, 第一条会通过command_socket发送至对方的指令处理,
-//	    接下来的会话将会使用data_socket进行处理(适用于指令环境下);
+//	4: 当data, command都传入, 第一条会通过command_socket发送至对方的命令处理,
+//	    接下来的会话将会使用data_socket进行处理(适用于命令环境下);
 func NewSession(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket net.Conn, mark string, aesGcm *encryption.Gcm) (*Session, error) {
 
+	// 检查mark是否正常
 	if len(mark) != 8 {
 		return nil, errors.New("SocketSession: Mark标识缺少")
 	}
 
-	if dataSocket == nil && commandSocket == nil {
-		return nil, errors.New("SocketSession: data_socket和command_socket未传入")
-	}
-
+	// 选择发送方法
 	method := 0
-	if dataSocket != nil && commandSocket != nil {
+	if dataSocket == nil && commandSocket == nil {
 		panic("dataSocket & commandSocket未传入")
 	} else if dataSocket != nil && commandSocket == nil {
 		method = 1
 	} else {
 		method = 2
 	}
-	//var aesGcm *encryption.Gcm = nil
-	var err error
 
+	// 初始化timeChannel
+	var err error
 	if timeChannel != nil {
 		err = timeChannel.CreateRecv(mark)
 		if err != nil {
+			var addr string
+			if dataSocket != nil {
+				addr = dataSocket.RemoteAddr().String()
+			} else if commandSocket != nil {
+				addr = commandSocket.RemoteAddr().String()
+			}
+			logrus.Errorf("NewSession: Error creating session with host %s! %s", addr, err)
 			return nil, err
 		}
 	}
@@ -69,6 +74,7 @@ func NewSession(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket 
 	}, nil
 }
 
+// SendCommand 发送命令
 func (s *Session) SendCommand(data comm.Command, output, encrypt bool) (result map[string]any, err error) {
 	commandJson, err := json.Marshal(data)
 	if err != nil {
@@ -76,15 +82,15 @@ func (s *Session) SendCommand(data comm.Command, output, encrypt bool) (result m
 	}
 	if encrypt {
 		if len(commandJson) > 4060 {
-			panic("sendNoTimeDict: 指令发送时大于4060个字节")
+			panic("sendNoTimeDict: 命令发送时大于4060个字节")
 		} else if len(commandJson) < 36 {
-			panic("sendNoTimeDict: 指令发送时无字节")
+			panic("sendNoTimeDict: 命令发送时无字节")
 		}
 	} else {
 		if len(commandJson) > 4088 {
-			panic("sendNoTimeDict: 指令发送时大于4088个字节")
+			panic("sendNoTimeDict: 命令发送时大于4088个字节")
 		} else if len(commandJson) <= 8 {
-			panic("sendNoTimeDict: 指令发送时无字节")
+			panic("sendNoTimeDict: 命令发送时无字节")
 		}
 	}
 	var preparedData []byte
@@ -112,47 +118,6 @@ func (s *Session) SendCommand(data comm.Command, output, encrypt bool) (result m
 		return s.sendNoTimeDict(s.commandSocket, preparedData, output)
 	default:
 		panic("错误的Session发送方法")
-	}
-}
-
-func (s *Session) SendData(data []byte) (err error) {
-	if s.aesGCM != nil {
-		if len(data) > 4060 {
-			panic("sendNoTimeDict: 指令发送时大于4060个字节")
-		} else if len(data) < 36 {
-			panic("sendNoTimeDict: 指令发送时无字节")
-		}
-		byteData, err := s.aesGCM.AesGcmEncrypt(append(s.mark, data...))
-		if err != nil {
-			return err
-		}
-		_, err = s.dataSocket.Write(byteData)
-		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				logrus.Warningf("SendData: Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
-				return err
-			} else {
-				return err
-			}
-		}
-		return nil
-	} else {
-		if len(data) > 4088 {
-			panic("sendNoTimeDict: 指令发送时大于4088个字节")
-		} else if len(data) <= 8 {
-			panic("sendNoTimeDict: 指令发送时无字节")
-		}
-		byteData := append(s.mark, data...)
-		_, err = s.dataSocket.Write(byteData)
-		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				logrus.Warningf("SendData: Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
-				return err
-			} else {
-				return err
-			}
-		}
-		return nil
 	}
 }
 
@@ -202,17 +167,17 @@ func (s *Session) sendNoTimeDict(conn net.Conn, data []byte, output bool) (map[s
 
 }
 
-// sendTimeDict 发送指令并准确接收返回数据
+// sendTimeDict 发送命令并准确接收返回数据
 //
-//	例： 本地客户端发送至对方服务端 获取文件 的指令（对方会返回数据）。
+//	例： 本地客户端发送至对方服务端 获取文件 的命令（对方会返回数据）。
 //
 //	1. 生成 8 长度的字符串作为[答复ID]，并以此在timedict中创建一个接收接下来服务端回复的键值。
-//	2. 在发送指令的前方追加[答复ID]，编码发送。
+//	2. 在发送命令的前方追加[答复ID]，编码发送。
 //	3. 从timedict中等待返回值，如果超时，返回DATA_RECEIVE_TIMEOUT。
 //
 //	output: 设置是否等待接下来的返回值。
 //	socket_: 客户端选择使用（Command Socket/Data Socket）作为发送套接字（在此例下是主动发起请求方，为Command_socket）。
-//	command: 设置发送的指令, 如果为字典类型则转换为json发送。
+//	command: 设置发送的命令, 如果为字典类型则转换为json发送。
 //	return: 如果Output=True在发送数据后等待对方返回一条数据; 否则仅发送
 func (s *Session) sendTimeDict(conn net.Conn, command []byte, output bool) (map[string]any, error) {
 	_, err := conn.Write(command)
@@ -234,11 +199,14 @@ func (s *Session) sendTimeDict(conn net.Conn, command []byte, output bool) (map[
 				return nil, err
 			}
 			s.count += 1
+
+			// 处理远程错误
 			remoteStat, ok := decodeData["stat"].(string)
 			if ok {
 				logrus.Errorf("%s - %s", s.dataSocket.RemoteAddr().String(), remoteStat)
 				return nil, errors.New("error from remote")
 			}
+
 			return decodeData, nil
 		} else {
 			return nil, err
@@ -248,12 +216,8 @@ func (s *Session) sendTimeDict(conn net.Conn, command []byte, output bool) (map[
 	return nil, nil
 }
 
-func SendControl(data any) {
-
-}
-
 // Recv 从指定mark队列接收数据
-func (s *Session) Recv() (command comm.Command, ok bool) {
+func (s *Session) Recv() (command comm.Command, err error) {
 	data, err := s.timeChannel.Get(string(s.mark))
 	if err != nil {
 		return
@@ -262,7 +226,7 @@ func (s *Session) Recv() (command comm.Command, ok bool) {
 	if err != nil {
 		return
 	}
-	return command, true
+	return command, err
 }
 
 func (s *Session) RecvTimeout(timeout int) (command comm.Command, ok bool) {
