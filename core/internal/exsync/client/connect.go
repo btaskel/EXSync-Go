@@ -220,14 +220,14 @@ func (c *Client) connectRemoteCommandSocket() (ok bool, err error) {
 
 	// 本地密码不为空
 	requirePassword := func() bool {
-		_, offset := time.Now().Zone()
+		_, localOffset := time.Now().Zone()
 		reply := comm.Command{
 			Command: "comm",
 			Type:    "verifyConnect",
 			Method:  "post",
 			Data: map[string]any{
 				"version": config.Config.Version, // 当前版本
-				"offset":  offset / 3600,         // 当前时区
+				"offset":  localOffset / 3600,    // 当前时区
 				"id":      c.LocalID,             // 返回当前主机的id标识
 				"hash":    hashext.GetSha384(config.Config.Server.Addr.Password),
 				//"stat":    "",                    // 对于上个请求的状态反馈
@@ -252,7 +252,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool, err error) {
 		if !ok {
 			return false
 		}
-		remoteOffset, ok := command["offset"].(int)
+		remoteOffset, ok := command["offset"].(int64)
 		if !ok {
 			return false
 		}
@@ -261,7 +261,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool, err error) {
 		c.VerifyManage[c.IP] = serverOption.VerifyManage{
 			AesKey:      config.Config.Server.Addr.Password,
 			RemoteID:    remoteID,
-			Offset:      remoteOffset * 3600,
+			Offset:      remoteOffset*3600 - int64(localOffset),
 			Permissions: remotePermissions,
 		}
 		return true

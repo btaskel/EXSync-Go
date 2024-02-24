@@ -13,9 +13,9 @@ import (
 
 var VerifyManage map[string]serverOption.VerifyManage
 
-// initClient 主动创建客户端连接对方
+// InitClient 主动创建客户端连接对方
 // 如果已经预验证，那么直接连接即可通过验证
-func (s *Server) initClient(ip string) {
+func (s *Server) InitClient(ip string) {
 	c, ok := client.NewClient(ip, s.ActiveConnectManage, VerifyManage)
 	if ok {
 		s.ActiveConnectManage[ip] = serverOption.ActiveConnectManage{
@@ -93,7 +93,7 @@ func (s *Server) checkDevices(ipSet map[string]struct{}) {
 	for ip := range ipSet {
 		addr := ip
 		go func() {
-			s.initClient(addr)
+			s.InitClient(addr)
 			wait.Done()
 		}()
 	}

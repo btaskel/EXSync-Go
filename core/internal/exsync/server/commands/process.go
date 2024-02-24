@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"EXSync/core/internal/exsync/server"
 	"EXSync/core/internal/exsync/server/commands/ext"
 	"EXSync/core/option/exsync/comm"
 	"encoding/json"
@@ -14,7 +15,7 @@ func (c *CommandProcess) recvCommand() {
 	defer func() {
 		c.close = true
 	}()
-	commandSet, err := ext.NewCommandSet(c.TimeChannel, c.DataSocket, c.CommandSocket, c.AesGCM, 28)
+	commandSet, err := ext.NewCommandSet(c.TimeChannel, c.DataSocket, c.CommandSocket, c.AesGCM, 28, server.VerifyManage)
 	if err != nil {
 		logrus.Errorf("recvCommand: Failed to initialize commandSet! %s", err)
 		return
@@ -28,10 +29,11 @@ func (c *CommandProcess) recvCommand() {
 		n, err := c.CommandSocket.Read(buf)
 		if err != nil {
 			if err == io.EOF {
-				logrus.Debugf("recvCommand: Passive connection disconnected from host %s.", c.IP)
+				logrus.Debugf("Passive-recvCommand: connection disconnected from host %s.", c.IP)
+				c.close = true
 				return
 			} else {
-				logrus.Errorf("Failed to receive data sent from CommandSocket from host %s", c.IP)
+				logrus.Errorf("Passive-recvCommand: Failed to receive data sent from CommandSocket from host %s", c.IP)
 			}
 			return
 		}
@@ -60,7 +62,7 @@ func (c *CommandProcess) recvData() {
 		n, err := c.DataSocket.Read(buf)
 		if err != nil {
 			if err == io.EOF {
-				logrus.Debugf("recvData: Passive connection disconnected from host %s.", c.IP)
+				logrus.Debugf("Passive-recvData: Passive connection disconnected from host %s.", c.IP)
 				c.close = true
 				return
 			} else {

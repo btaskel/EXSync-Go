@@ -622,15 +622,75 @@ func main() {
 	//hash, _ := m["b"].(string)
 	//fmt.Println(hash)
 	//writeFile()
-	type file struct {
-		Name string
-		Age  int
+	//type file struct {
+	//	Name string
+	//	Age  int
+	//}
+	//a := file{
+	//	//Name: "ss",
+	//	Age: 5,
+	//}
+	//fmt.Println(len(a.Name))
+	//fmt.Println(time.Now().UnixMilli())
+	//fileStat, err := os.Stat(".\\test\\test2.go")
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//t := fileStat.ModTime()
+	//editTime := t.Unix()
+	//
+	//fmt.Println(editTime)
+	//
+	//Bt := time.Unix(editTime+5, 0)
+	//err = os.Chtimes(".\\test\\test2.go", Bt, Bt)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//fmt.Println(Bt.Unix())
+
+	//t := TimeFunc(1708339242, 8, 9)
+	//fmt.Println(t)
+	//read()
+	//s := &ser{}
+	//go s.sT()
+	//s = nil
+	//time.Sleep(5 * time.Second)
+	a := func() {
+		go process()
 	}
-	a := file{
-		//Name: "ss",
-		Age: 5,
-	}
-	fmt.Println(len(a.Name))
+	a()
+	time.Sleep(1 * time.Second)
+	fmt.Println("end")
+	time.Sleep(4 * time.Second)
+}
+
+func process() {
+	fmt.Println("456")
+	time.Sleep(3 * time.Second)
+	fmt.Println("123")
+}
+
+type ser struct {
+}
+
+func (s *ser) sT() {
+	fmt.Println("1")
+	time.Sleep(3 * time.Second)
+	fmt.Println("2")
+}
+
+func read() {
+	info := os.Getenv(".\\")
+	fmt.Println(info)
+}
+
+//	func TimeFunc(t, offset1, offset2 int64) int64 {
+//		return time.Unix(t-(offset2*3600-offset1*3600), 0).Unix()
+//	}
+func TimeFunc(t, offset1, offset2 int64) int64 {
+	return time.Unix(t-(9*3600-8*3600), 0).Unix()
 }
 
 func writeFile() {

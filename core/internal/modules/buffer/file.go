@@ -2,14 +2,15 @@ package buffer
 
 import (
 	"EXSync/core/internal/config"
+	serverOption "EXSync/core/option/exsync/server"
 	"os"
 	"time"
 )
 
 // FileWrite 文件写入缓冲区
-func (f *File) FileWrite(file *os.File, StartSize, TotalSize int64, filePath string, date int64) error {
-	buf := make([]byte, 256) // 256 * 4096 = 1048576
-	unix := time.Unix(date, 0)
+func (f *File) FileWrite(file *os.File, StartSize, TotalSize int64, filePath string, date int64, verifyManage serverOption.VerifyManage) error {
+	buf := make([]byte, 256)                       // 256 * 4096 = 1048576 = 1MB
+	unix := time.Unix(date-verifyManage.Offset, 0) // 计算文件时间偏移后的日期, 并转换为time对象
 	for {
 		result, err := f.TimeChannel.GetTimeout(f.FileMark, config.SocketTimeout)
 		if err != nil {

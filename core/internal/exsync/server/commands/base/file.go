@@ -46,6 +46,12 @@ func (c *Base) sendData(file *os.File, fileMark string, dataBlock, total int64) 
 }
 
 func (c *Base) GetFile(data map[string]any) {
+	// 权限验证
+	if !CheckPermission(c.VerifyManage[c.Ip], []string{comm.PermRead}) {
+		logrus.Warningf("Passive-GetFile-Permission: Host %s is attempting an unauthorized operation <read> !", c.Ip)
+		return
+	}
+
 	pathList, ok := data["pathList"].([]string)
 	if !ok {
 		return
@@ -106,6 +112,7 @@ func (c *Base) GetFile(data map[string]any) {
 				Data: map[string]any{
 					"size": file.Size,
 					"hash": file.Hash,
+					"date": file.EditDate,
 				},
 			}
 		} else {
@@ -142,36 +149,43 @@ func (c *Base) GetFile(data map[string]any) {
 					return
 				}
 
+				// 判断为需要续写的文件
 				var continueWrite bool
 				if hashList[i] == fmt.Sprintf("%X", hasher.Sum(nil)) {
-					// 判断为需要续写的文件
 					continueWrite = true
 				} else {
 					continueWrite = false
 				}
+
 				command = comm.Command{
-					Command: "",
-					Type:    "",
-					Method:  "",
 					Data: map[string]any{
 						"ok": continueWrite,
 					},
 				}
 				_, err = session.SendCommand(command, false, true)
+				if err != nil {
+					return
+				}
+
 				if continueWrite {
 					f, err = os.Open(remoteAbsPath)
 					if err != nil {
 						return
 					}
-					defer f.Close()
+					defer func(f *os.File) {
+						err = f.Close()
+						if err != nil {
+							return
+						}
+					}(f)
 					err = c.sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
 					if err != nil {
 						netErr, ok := err.(net.Error)
 						if ok && netErr.Timeout() {
-							logrus.Errorf("passive - Sync Space %s :Sending %s file timeout!", space.SpaceName, remoteAbsPath)
+							logrus.Errorf("passive-GetFile - Sync Space %s :Sending %s file timeout!", space.SpaceName, remoteAbsPath)
 							return
 						} else {
-							logrus.Warningf("passive - Sync Space %s :File %s transfer failed due to unexpected disconnection from host %s.", space.SpaceName, remoteAbsPath, c.Ip)
+							logrus.Warningf("passive-GetFile - Sync Space %s :File %s transfer failed due to unexpected disconnection from host %s.", space.SpaceName, remoteAbsPath, c.Ip)
 							return
 						}
 					}
@@ -184,15 +198,20 @@ func (c *Base) GetFile(data map[string]any) {
 				if err != nil {
 					return
 				}
-				defer f.Close()
+				defer func(f *os.File) {
+					err = f.Close()
+					if err != nil {
+						return
+					}
+				}(f)
 				err = c.sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
 				if err != nil {
 					netErr, ok := err.(net.Error)
 					if ok && netErr.Timeout() {
-						logrus.Errorf("passive - Sync Space %s :Sending %s file timeout!", space.SpaceName, remoteAbsPath)
+						logrus.Errorf("passive-GetFile - Sync Space %s :Sending %s file timeout!", space.SpaceName, remoteAbsPath)
 						return
 					} else {
-						logrus.Warningf("passive - Sync Space %s :File %s transfer failed due to unexpected disconnection from host %s.", space.SpaceName, remoteAbsPath, c.Ip)
+						logrus.Warningf("passive-GetFile - Sync Space %s :File %s transfer failed due to unexpected disconnection from host %s.", space.SpaceName, remoteAbsPath, c.Ip)
 						return
 					}
 				}
@@ -215,7 +234,7 @@ func (c *Base) GetFile(data map[string]any) {
 		go subRoutine(i, &wait)
 	}
 	wait.Wait()
-	logrus.Debugf("passive - Sync Space %s :File a, b begins to transfer")
+	logrus.Debugf("passive-GetFile Sync Space %s :File a, b begins to transfer", spaceName)
 }
 
 //// GetFile 客户端从服务端接收数据
@@ -490,21 +509,19 @@ func (c *Base) PostFile(data map[string]any, replyMark string, db *gorm.DB) {
 				logrus.Errorf("PostFile: Error opening or creating file:%s", err)
 				return
 			}
-
+			defer f.Close()
 			for readData > 0 {
 				readData -= dataBlock
 				result, err := c.TimeChannel.Get(fileMark)
 				if err != nil {
-					f.Close()
+
 					return
 				}
 				_, err = f.Write(result)
 				if err != nil {
-					f.Close()
 					return
 				}
 			}
-			f.Close()
 			return
 		} else {
 			return
@@ -524,17 +541,17 @@ func (c *Base) PostFile(data map[string]any, replyMark string, db *gorm.DB) {
 		if err != nil {
 			return
 		}
+		defer f.Close()
+
 		readData := remoteFileSize
 		for readData > 0 {
 			readData -= dataBlock
 			result, err := c.TimeChannel.Get(fileMark)
 			if err != nil {
-				f.Close()
 				return
 			}
 			_, err = f.Write(result)
 			if err != nil {
-				f.Close()
 				return
 			}
 		}

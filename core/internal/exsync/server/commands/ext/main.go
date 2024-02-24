@@ -22,7 +22,7 @@ func NewCommandSet(timeChannel *timechannel.TimeChannel, dataSocket, commandSock
 		return nil, err
 	}
 
-	c := CommandSet{base.Base{
+	commServer := base.Base{
 		Ip:             ip,
 		TimeChannel:    timeChannel,
 		DataSocket:     dataSocket,
@@ -30,7 +30,8 @@ func NewCommandSet(timeChannel *timechannel.TimeChannel, dataSocket, commandSock
 		AesGCM:         AesGCM,
 		EncryptionLoss: EncryptionLoss,
 		VerifyManage:   verifyManage,
-	}}
+	}
+	c := CommandSet{commServer}
 
 	return &c, err
 }

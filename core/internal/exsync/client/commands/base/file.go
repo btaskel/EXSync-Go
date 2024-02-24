@@ -38,6 +38,11 @@ type FileErr struct {
 // 如果本地文件是待续写文件，将会续写
 // 如果本地文件不存在，将会创建
 func (b *Base) GetFile(relPaths, outPaths []string, space configOption.UdDict) (failedFiles map[string]error, err error) {
+	// 权限验证
+	if !CheckPermission(b.VerifyManage, []string{comm.PermRead}) {
+		return nil, errors.New("MissingPermissions")
+	}
+
 	// 初始化GetFile
 	var (
 		hashList      []string
@@ -152,6 +157,11 @@ func (b *Base) GetFile(relPaths, outPaths []string, space configOption.UdDict) (
 		}
 
 		// 处理远程文件状态
+		remoteFileDate, ok := reply.Data["date"].(int64)
+		if !ok {
+			socket.SendStat(s, "Active-GetFile-subRoutine: Missing parameter <date>!")
+			return
+		}
 		remoteFileSize, ok := reply.Data["size"].(int64)
 		if !ok {
 			socket.SendStat(s, "Active-GetFile-subRoutine: Missing parameter <size>!")
@@ -215,7 +225,7 @@ func (b *Base) GetFile(relPaths, outPaths []string, space configOption.UdDict) (
 				}
 			}(f)
 			// 创建文件缓冲区(1MB)
-			err = fileBuf.FileWrite(f, localFileSize, remoteFileSize)
+			err = fileBuf.FileWrite(f, localFileSize, remoteFileSize, outPath, remoteFileDate, b.VerifyManage)
 			if err == errors.New("timeout") {
 				logrus.Errorf("Active-GetFile-subRoutine: Sync Space %s :Receiving %s file timeout!", space.SpaceName, filePath)
 			} else {
@@ -245,9 +255,9 @@ func (b *Base) GetFile(relPaths, outPaths []string, space configOption.UdDict) (
 			}(f)
 
 			// 创建文件缓冲区(1MB)
-			err = fileBuf.FileWrite(f, localFileSize, remoteFileSize)
+			err = fileBuf.FileWrite(f, localFileSize, remoteFileSize, outPath, remoteFileDate, b.VerifyManage)
 			if err == errors.New("timeout") {
-				logrus.Errorf("Active-GetFile-subRoutine: Sync Space %s :Receiving %s file timeout!", space.SpaceName, filePath)
+				logrus.Errorf("Active-GetFile-subRoutine: Sync Space %s :Receiving %s file timeout! %s", space.SpaceName, filePath, err)
 				failFilesChan <- map[string]error{
 					outPath: SocketTimeoutErr,
 				}

@@ -41,7 +41,6 @@ type ConfigStruct struct {
 		Spacename string   `json:"spacename"`
 		Path      string   `json:"path"`
 		Interval  int      `json:"interval"`
-		Autostart bool     `json:"autostart"`
 		Active    bool     `json:"active"`
 		Devices   []string `json:"devices"`
 	} `json:"userdata"`

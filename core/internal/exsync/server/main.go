@@ -6,17 +6,20 @@ import (
 	serverOption "EXSync/core/option/exsync/server"
 	"net"
 	"runtime"
+	"sync"
 	"time"
 )
 
 type Server struct {
-	ActiveConnectManage  map[string]serverOption.ActiveConnectManage  // 当前主机主动连接远程主机的实例管理
-	PassiveConnectManage map[string]serverOption.PassiveConnectManage // 当前主机被动连接远程主机的实例管理
-	StopNewConnections   bool
-	mergeSocketDict      map[string]map[string]net.Conn
-	commandSet           *ext.CommandSet
+	ActiveConnectManage    map[string]serverOption.ActiveConnectManage  // 当前主机主动连接远程主机的实例管理
+	PassiveConnectManage   map[string]serverOption.PassiveConnectManage // 当前主机被动连接远程主机的实例管理
+	mergeSocketDict        map[string]map[string]net.Conn
+	commandSet             *ext.CommandSet
+	commListen, dataListen net.Listener
+	stopServer             bool
 }
 
+// NewServer 创建传输服务对象
 func NewServer() *Server {
 	// 设置使用线程
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -28,21 +31,42 @@ func NewServer() *Server {
 		mergeSocketDict:      make(map[string]map[string]net.Conn),
 	}
 
+	return &server
+}
+
+// Run 运行服务
+func (s *Server) Run() {
 	// 创建局域网扫描验证服务
 	go func() {
 		for {
-			if server.StopNewConnections {
+			if s.stopServer {
 				return
 			}
-			server.getDevices()
+			s.getDevices()
 			time.Sleep(10 * time.Second)
 		}
 	}()
+	go func() {
+		// 创建监听套接字
+		port := config.Config.Server.Addr.Port
 
-	// 创建监听套接字
-	port := config.Config.Server.Addr.Port
-	go server.createDataSocket(port)
-	go server.createCommandSocket(port + 1)
+		wait := sync.WaitGroup{}
+		wait.Add(2)
+		go func() {
+			s.createDataSocket(port)
+			wait.Done()
+		}()
+		go func() {
+			s.createCommandSocket(port + 1)
+			wait.Done()
+		}()
+		wait.Wait()
+	}()
+}
 
-	return &server
+// Close 关闭服务
+func (s *Server) Close() {
+	s.commListen.Close()
+	s.dataListen.Close()
+	s.stopServer = true
 }

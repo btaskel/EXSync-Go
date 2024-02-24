@@ -11,9 +11,9 @@
 5. 同步操作会在**多个设备**间进行
 6. 远程**控制桌面**(实验性)。
 
-当前项目贡献者：
+当前项目贡献者(不分先后顺序)：
 
-    Bt（Bt_Asker）shallow-zzt （Sha110w_4qua）
+    Bt（btaskel） shallow-zzt（Sha110w_4qua）
 
 **状态：制作中未完成, 而且也没有test**
 

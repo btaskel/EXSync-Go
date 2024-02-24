@@ -118,7 +118,7 @@ func (c *Base) VerifyConnect(data map[string]any, mark string) {
 		socket.SendStat(s, "Passive-VerifyConnect: Missing parameter <version> during connection verification")
 		return
 	}
-	remoteOffset, ok := data["offset"].(int)
+	remoteOffset, ok := data["offset"].(int64)
 	if !ok {
 		socket.SendStat(s, "Passive-VerifyConnect: Missing parameter <offset> during connection verification")
 		return
@@ -148,17 +148,13 @@ func (c *Base) VerifyConnect(data map[string]any, mark string) {
 }
 
 // v01 0.1 version
-func (c *Base) v01(s *socket.Session, remoteOffset int, remoteID, remoteHash string) {
-	offset := remoteOffset * 3600
+func (c *Base) v01(s *socket.Session, remoteOffset int64, remoteID, remoteHash string) {
 	if remoteHash != hashext.GetSha384(config.Config.Server.Addr.Password) {
 		socket.SendStat(s, "VerifyConnect: Identity verification failed!")
 		return
 	}
 	_, localOffset := time.Now().Zone()
 	command := comm.Command{
-		Command: "",
-		Type:    "",
-		Method:  "",
 		Data: map[string]any{
 			"id":          config.Config.Server.Addr.ID,
 			"permissions": map[string]struct{}{"r": {}, "w": {}},
@@ -174,7 +170,7 @@ func (c *Base) v01(s *socket.Session, remoteOffset int, remoteID, remoteHash str
 	c.VerifyManage[c.Ip] = serverOption.VerifyManage{
 		AesKey:   config.Config.Server.Addr.Password,
 		RemoteID: remoteID,
-		Offset:   offset,
+		Offset:   remoteOffset*3600 - int64(localOffset), // 计算偏移量
 		Permissions: map[string]struct{}{
 			"r": {},
 			"w": {},

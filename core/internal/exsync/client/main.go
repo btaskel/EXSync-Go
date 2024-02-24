@@ -2,6 +2,7 @@ package client
 
 import (
 	"EXSync/core/internal/config"
+	"EXSync/core/internal/exsync/client/commands/base"
 	"EXSync/core/internal/exsync/client/commands/ext"
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
@@ -42,7 +43,6 @@ func NewClient(ip string, activeConnectManage map[string]serverOption.ActiveConn
 
 	// 初始化独立的TimeChannel
 	timeChannel := timechannel.NewTimeChannel()
-	defer timeChannel.Close()
 
 	// 初始化Client实例
 	client := &Client{
@@ -67,7 +67,16 @@ func NewClient(ip string, activeConnectManage map[string]serverOption.ActiveConn
 		return nil, false
 	}
 	if err == nil {
-		client.Comm = ext.NewCommandSet(ip, client.dataSocket, client.commandSocket, timeChannel, gcm, 28)
+		commBase := base.Base{
+			Ip:             ip,
+			TimeChannel:    timeChannel,
+			DataSocket:     client.dataSocket,
+			CommandSocket:  client.commandSocket,
+			AesGCM:         gcm,
+			VerifyManage:   verifyManage[ip],
+			EncryptionLoss: 28,
+		}
+		client.Comm = ext.NewCommandSet(commBase)
 		return client, true
 	} else {
 		logrus.Errorf("NewClient: Verification of connection identity with %s failed! %s", ip, err)

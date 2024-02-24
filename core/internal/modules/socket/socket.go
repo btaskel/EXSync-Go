@@ -216,7 +216,7 @@ func (s *Session) sendTimeDict(conn net.Conn, command []byte, output bool) (map[
 	return nil, nil
 }
 
-// Recv 从指定mark队列接收数据
+// Recv 从指定mark队列接收数据并映射到命令，默认按全局设置进行超时操作
 func (s *Session) Recv() (command comm.Command, err error) {
 	data, err := s.timeChannel.Get(string(s.mark))
 	if err != nil {
@@ -229,6 +229,7 @@ func (s *Session) Recv() (command comm.Command, err error) {
 	return command, err
 }
 
+// RecvTimeout 从指定mark队列接收数据，并按timeout秒来确定何时超时
 func (s *Session) RecvTimeout(timeout int) (command comm.Command, ok bool) {
 	data, err := s.timeChannel.GetTimeout(string(s.mark), timeout)
 	if err != nil {

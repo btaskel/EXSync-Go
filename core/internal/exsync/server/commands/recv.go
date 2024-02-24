@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"EXSync/core/internal/exsync/server/scan"
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
 	serverOption "EXSync/core/option/exsync/server"
@@ -22,10 +21,10 @@ type CommandProcess struct {
 }
 
 // NewCommandProcess 对已经被动建立连接的CommandSocket进行初始化
-func NewCommandProcess(host string, dataSocket, commandSocket net.Conn, connectManage *map[string]serverOption.PassiveConnectManage) {
+func NewCommandProcess(host string, dataSocket, commandSocket net.Conn, passiveConnectManage map[string]serverOption.PassiveConnectManage, VerifyManage map[string]serverOption.VerifyManage) {
 	// 判断是否有aes-gcm加密实例，如果有则在接收数据时使用aes-gcm；否则，明文传输；
 	var gcm *encryption.Gcm
-	hostVerifyInfo, ok := scan.VerifyManage[host]
+	hostVerifyInfo, ok := VerifyManage[host]
 	if ok && len(hostVerifyInfo.AesKey) != 0 {
 		var err error
 		gcm, err = encryption.NewGCM(hostVerifyInfo.AesKey)
@@ -49,9 +48,10 @@ func NewCommandProcess(host string, dataSocket, commandSocket net.Conn, connectM
 	}
 
 	// 将被动连接增加至PassiveConnectManage实例
-	(*connectManage)[host] = serverOption.PassiveConnectManage{
-		ID:         "",
-		CreateTime: time.Now(),
+	passiveConnectManage[host] = serverOption.PassiveConnectManage{
+		ID:             "",
+		CreateTime:     time.Now(),
+		CommandProcess: &cp,
 	}
 	logrus.Debugf("NewCommandProcess: A passive connection for %s has been created.", host)
 
@@ -66,10 +66,20 @@ func NewCommandProcess(host string, dataSocket, commandSocket net.Conn, connectM
 		wait.Done()
 	}()
 	wait.Wait()
-	cp.CommandSocket.Close()
-	cp.DataSocket.Close()
-	cp.TimeChannel.Close()
-	delete(*connectManage, host)
+
+	// 如果在被动连接列表则进行关闭删除操作; 用于防止再次关闭
+	if _, ok := passiveConnectManage[host]; ok {
+		// 关闭socket
+		cp.CommandSocket.Close()
+		cp.DataSocket.Close()
+
+		// 释放timeChannel
+		cp.TimeChannel.Close()
+
+		// 从被动连接列表删除已连接设备
+		delete(passiveConnectManage, host)
+	}
+
 	logrus.Debugf("NewCommandProcess: Passive connection disconnected from host %s", host)
 	return
 }
