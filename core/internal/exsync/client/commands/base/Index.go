@@ -1,6 +1,6 @@
 package base
 
-func GetIndex() {
+func (b *Base) GetIndex() {
 
 }
 

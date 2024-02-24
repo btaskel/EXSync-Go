@@ -3,10 +3,10 @@ package socket
 import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
+	loger "EXSync/core/log"
 	"EXSync/core/option/exsync/comm"
 	"encoding/json"
 	"errors"
-	"github.com/sirupsen/logrus"
 	"net"
 )
 
@@ -58,7 +58,7 @@ func NewSession(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket 
 			} else if commandSocket != nil {
 				addr = commandSocket.RemoteAddr().String()
 			}
-			logrus.Errorf("NewSession: Error creating session with host %s! %s", addr, err)
+			loger.Log.Errorf("NewSession: Error creating session with host %s! %s", addr, err)
 			return nil, err
 		}
 	}
@@ -131,7 +131,7 @@ func (s *Session) SendDataP(data []byte) (err error) {
 	}
 	_, err = s.dataSocket.Write(byteData)
 	if err != nil {
-		logrus.Warningf("SendDataP: Sending data to %s timeout", err)
+		loger.Log.Warningf("SendDataP: Sending data to %s timeout", err)
 	}
 	return
 }
@@ -141,7 +141,7 @@ func (s *Session) sendNoTimeDict(conn net.Conn, data []byte, output bool) (map[s
 	_, err := conn.Write(data)
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
+			loger.Log.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
 			return nil, err
 		} else {
 			return nil, err
@@ -153,7 +153,7 @@ func (s *Session) sendNoTimeDict(conn net.Conn, data []byte, output bool) (map[s
 		n, err := conn.Read(buf)
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				logrus.Warningf("Received %s data timeout", s.dataSocket.RemoteAddr().String())
+				loger.Log.Warningf("Received %s data timeout", s.dataSocket.RemoteAddr().String())
 			} else {
 				return nil, err
 			}
@@ -183,7 +183,7 @@ func (s *Session) sendTimeDict(conn net.Conn, command []byte, output bool) (map[
 	_, err := conn.Write(command)
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			logrus.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
+			loger.Log.Warningf("Sending data to %s timeout", s.dataSocket.RemoteAddr().String())
 			return nil, err
 		} else {
 			return nil, err
@@ -203,7 +203,7 @@ func (s *Session) sendTimeDict(conn net.Conn, command []byte, output bool) (map[
 			// 处理远程错误
 			remoteStat, ok := decodeData["stat"].(string)
 			if ok {
-				logrus.Errorf("%s - %s", s.dataSocket.RemoteAddr().String(), remoteStat)
+				loger.Log.Errorf("%s - %s", s.dataSocket.RemoteAddr().String(), remoteStat)
 				return nil, errors.New("error from remote")
 			}
 

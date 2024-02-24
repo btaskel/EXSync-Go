@@ -7,9 +7,9 @@ import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
 	"EXSync/core/internal/proxy"
+	loger "EXSync/core/log"
 	serverOption "EXSync/core/option/exsync/server"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"net"
 	"time"
 )
@@ -36,7 +36,7 @@ func NewClient(ip string, activeConnectManage map[string]serverOption.ActiveConn
 	if len(config.Config.Server.Addr.Password) != 0 {
 		gcm, err = encryption.NewGCM(config.Config.Server.Addr.Password)
 		if err != nil {
-			logrus.Errorf("NewClient: Failed to create AES-GCM! %s", ip)
+			loger.Log.Errorf("NewClient: Failed to create AES-GCM! %s", ip)
 			return nil, false
 		}
 	}
@@ -57,7 +57,7 @@ func NewClient(ip string, activeConnectManage map[string]serverOption.ActiveConn
 	// 初始化Socket, 如果使用socks5代理，则使用socks进行初始化
 	err = client.initSocket()
 	if err != nil {
-		logrus.Errorf("NewClient: Failed to initialize socket! %s", ip)
+		loger.Log.Errorf("NewClient: Failed to initialize socket! %s", ip)
 		return nil, false
 	}
 
@@ -79,7 +79,7 @@ func NewClient(ip string, activeConnectManage map[string]serverOption.ActiveConn
 		client.Comm = ext.NewCommandSet(commBase)
 		return client, true
 	} else {
-		logrus.Errorf("NewClient: Verification of connection identity with %s failed! %s", ip, err)
+		loger.Log.Errorf("NewClient: Verification of connection identity with %s failed! %s", ip, err)
 		return nil, false
 	}
 }
@@ -92,7 +92,7 @@ func (c *Client) initSocket() (err error) {
 		c.commandSocket, err = net.DialTimeout("tcp", addr, 4*time.Second)
 	}
 	if err != nil {
-		logrus.Warningf("Client initSocket: Connection to host %s timeout!", c.IP)
+		loger.Log.Warningf("Client initSocket: Connection to host %s timeout!", c.IP)
 		return err
 	}
 	addr = fmt.Sprintf("%s:%d", c.IP, config.Config.Server.Addr.Port)
@@ -102,7 +102,7 @@ func (c *Client) initSocket() (err error) {
 		c.dataSocket, err = net.DialTimeout("tcp", addr, 4*time.Second)
 	}
 	if err != nil {
-		logrus.Warningf("Client initSocket: Connection to host %s timeout!", c.IP)
+		loger.Log.Warningf("Client initSocket: Connection to host %s timeout!", c.IP)
 		return err
 	}
 	return nil
@@ -114,7 +114,7 @@ func (c *Client) Close() bool {
 	if err != nil {
 		netErr, ok := err.(*net.OpError)
 		if ok && netErr.Err.Error() != "use of closed network connection" {
-			logrus.Errorf("Attempt to close active connection with host %s failed! %s", c.IP, err)
+			loger.Log.Errorf("Attempt to close active connection with host %s failed! %s", c.IP, err)
 			return false
 		}
 	}
@@ -122,7 +122,7 @@ func (c *Client) Close() bool {
 	if err != nil {
 		netErr, ok := err.(*net.OpError)
 		if ok && netErr.Err.Error() != "use of closed network connection" {
-			logrus.Errorf("Attempt to close active connection with host %s failed! %s", c.IP, err)
+			loger.Log.Errorf("Attempt to close active connection with host %s failed! %s", c.IP, err)
 			return false
 		}
 	}

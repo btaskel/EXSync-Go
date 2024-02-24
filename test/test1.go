@@ -657,13 +657,33 @@ func main() {
 	//go s.sT()
 	//s = nil
 	//time.Sleep(5 * time.Second)
-	a := func() {
-		go process()
-	}
-	a()
-	time.Sleep(1 * time.Second)
-	fmt.Println("end")
-	time.Sleep(4 * time.Second)
+	//a := func() {
+	//	go process()
+	//}
+	//a()
+	//time.Sleep(1 * time.Second)
+	//fmt.Println("end")
+	//time.Sleep(4 * time.Second)
+	//d := map[string]any{
+	//	"aa": map[string]any{
+	//		"bb": 12,
+	//	},
+	//}
+	//for s, v := range d {
+	//	fmt.Println(s, v.(map[string]any)["bb"].(int))
+	//}
+	//type file struct {
+	//	FileName string
+	//	Path     string
+	//}
+	//f := file{
+	//	FileName: "a",
+	//	Path:     "b",
+	//}
+	//for k := range f {
+	//	fmt.Println(k)
+	//}
+
 }
 
 func process() {

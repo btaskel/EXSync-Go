@@ -12,10 +12,10 @@ type TimeChannel struct {
 	lock        sync.Mutex
 }
 
-// NewTimeChannel 创建一个数据接收队列
+// NewTimeChannel 创建一个数据接收队列, 每个队列默认最大使用2MB内存
 func NewTimeChannel() *TimeChannel {
 	return &TimeChannel{
-		make(map[string]chan []byte),
+		make(map[string]chan []byte, 512),
 		sync.Mutex{},
 	}
 }

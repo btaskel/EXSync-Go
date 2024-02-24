@@ -3,9 +3,9 @@ package server
 import (
 	"EXSync/core/internal/config"
 	"EXSync/core/internal/exsync/server/commands"
+	loger "EXSync/core/log"
 	serverOption "EXSync/core/option/exsync/server"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"net"
 )
 
@@ -20,7 +20,7 @@ func (s *Server) createCommandSocket(port int) {
 	for {
 		conn, err := listen.Accept()
 		if err != nil {
-			logrus.Debugf("address %s: %s", address, err)
+			loger.Log.Debugf("address %s: %s", address, err)
 			continue
 		}
 		go s.verifyCommandSocket(conn)
@@ -38,7 +38,7 @@ func (s *Server) createDataSocket(port int) {
 	for {
 		conn, err := listen.Accept()
 		if err != nil {
-			logrus.Debugf("address %s: %s", address, err)
+			loger.Log.Debugf("address %s: %s", address, err)
 			continue
 		}
 		go s.verifyDataSocket(conn)
@@ -50,7 +50,7 @@ func (s *Server) verifyCommandSocket(commandSocket net.Conn) {
 	defer func(commandSocket net.Conn) {
 		err := commandSocket.Close()
 		if err != nil {
-			logrus.Warning(err)
+			loger.Log.Warning(err)
 		}
 	}(commandSocket)
 	addr := commandSocket.RemoteAddr().String()
@@ -58,7 +58,7 @@ func (s *Server) verifyCommandSocket(commandSocket net.Conn) {
 	if err != nil {
 		return
 	}
-	logrus.Infof("Starting to verify command socket connection from %s...", host)
+	loger.Log.Infof("Starting to verify command socket connection from %s...", host)
 	if hostInfo, ok := VerifyManage[host]; ok && hostInfo.AesKey != "" {
 		if dataSocket, ok := s.mergeSocketDict[host]["command"]; ok {
 			go commands.NewCommandProcess(host, dataSocket, commandSocket, s.PassiveConnectManage, VerifyManage)
@@ -81,7 +81,7 @@ func (s *Server) verifyDataSocket(dataSocket net.Conn) {
 	defer func(dataSocket net.Conn) {
 		err := dataSocket.Close()
 		if err != nil {
-			logrus.Warning(err)
+			loger.Log.Warning(err)
 		}
 	}(dataSocket)
 	addr := dataSocket.RemoteAddr().String()
@@ -89,7 +89,7 @@ func (s *Server) verifyDataSocket(dataSocket net.Conn) {
 	if err != nil {
 		return
 	}
-	logrus.Infof("Starting to verify data socket connection from %s...", host)
+	loger.Log.Infof("Starting to verify data socket connection from %s...", host)
 	if hostInfo, ok := VerifyManage[host]; ok && hostInfo.AesKey != "" {
 		if commandSocket, ok := s.mergeSocketDict[host]["command"]; ok {
 			go commands.NewCommandProcess(host, dataSocket, commandSocket, s.PassiveConnectManage, VerifyManage)
@@ -117,12 +117,12 @@ func (s *Server) ClosePassiveConnect(cp *commands.CommandProcess, passiveConnect
 	// 关闭socket
 	err = cp.CommandSocket.Close()
 	if err != nil {
-		logrus.Warningf("Passive-ClosePassiveConnect: An error occurred when disconnecting from the CommandSocket connection of the %s host", host)
+		loger.Log.Warningf("Passive-ClosePassiveConnect: An error occurred when disconnecting from the CommandSocket connection of the %s host", host)
 		return false
 	}
 	err = cp.DataSocket.Close()
 	if err != nil {
-		logrus.Warningf("Passive-ClosePassiveConnect: An error occurred when disconnecting from the DataSocket connection of the %s host", host)
+		loger.Log.Warningf("Passive-ClosePassiveConnect: An error occurred when disconnecting from the DataSocket connection of the %s host", host)
 		return false
 	}
 

@@ -4,9 +4,9 @@ import (
 	"EXSync/core/internal/config"
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/socket"
+	loger "EXSync/core/log"
 	"EXSync/core/option/exsync/comm"
 	serverOption "EXSync/core/option/exsync/server"
-	"github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -19,7 +19,7 @@ import (
 //	defer session.Close()
 //	version, ok := data["version"].(float64)
 //	if !ok {
-//		logrus.Errorf("Host %s : Missing parameter [version] for execution [verifyConnect]", c.Ip)
+//		loger.Log.Errorf("Host %s : Missing parameter [version] for execution [verifyConnect]", c.Ip)
 //		return
 //	}
 //	if version != config.Config.Version {
@@ -140,7 +140,7 @@ func (c *Base) VerifyConnect(data map[string]any, mark string) {
 	case 0.1:
 		c.v01(s, remoteOffset, remoteID, remoteHash)
 	default:
-		logrus.Warningf("Remote host %s uses unsupported verification version %v!", c.Ip, remoteVersion)
+		loger.Log.Warningf("Remote host %s uses unsupported verification version %v!", c.Ip, remoteVersion)
 		return
 	}
 

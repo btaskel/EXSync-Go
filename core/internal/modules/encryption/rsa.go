@@ -1,17 +1,17 @@
 package encryption
 
 import (
+	loger "EXSync/core/log"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
-	"github.com/sirupsen/logrus"
 )
 
 // GenerateKey 生成 RSA 密钥对
 func GenerateKey() (publicKey *rsa.PublicKey, privateKey *rsa.PrivateKey, err error) {
 	privateKey, err = rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		logrus.Errorf("GenerateKey: Failed to generate key pair! %s", err)
+		loger.Log.Errorf("GenerateKey: Failed to generate key pair! %s", err)
 		return nil, nil, err
 	}
 	publicKey = &privateKey.PublicKey
@@ -22,7 +22,7 @@ func GenerateKey() (publicKey *rsa.PublicKey, privateKey *rsa.PrivateKey, err er
 func RsaEncryptBase64(originalData []byte, publicKey *rsa.PublicKey) (string, error) {
 	encryptedData, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey, originalData)
 	if err != nil {
-		logrus.Errorf("RsaEncryptBase64: Encryption failed! %s", err)
+		loger.Log.Errorf("RsaEncryptBase64: Encryption failed! %s", err)
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(encryptedData), nil
@@ -32,7 +32,7 @@ func RsaEncryptBase64(originalData []byte, publicKey *rsa.PublicKey) (string, er
 func RsaDecryptBase64(encryptedData string, privateKey *rsa.PrivateKey) ([]byte, error) {
 	encryptedDecodeBytes, err := base64.StdEncoding.DecodeString(encryptedData)
 	if err != nil {
-		logrus.Errorf("RsaDecryptBase64: Decryption failed! %s", err)
+		loger.Log.Errorf("RsaDecryptBase64: Decryption failed! %s", err)
 		return nil, err
 	}
 	originalData, err := rsa.DecryptPKCS1v15(rand.Reader, privateKey, encryptedDecodeBytes)

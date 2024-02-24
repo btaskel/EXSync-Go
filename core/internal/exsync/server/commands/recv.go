@@ -3,8 +3,8 @@ package commands
 import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
+	loger "EXSync/core/log"
 	serverOption "EXSync/core/option/exsync/server"
-	"github.com/sirupsen/logrus"
 	"net"
 	"sync"
 	"time"
@@ -29,7 +29,7 @@ func NewCommandProcess(host string, dataSocket, commandSocket net.Conn, passiveC
 		var err error
 		gcm, err = encryption.NewGCM(hostVerifyInfo.AesKey)
 		if err != nil {
-			logrus.Errorf("NewCommandProcess: Error creating instruction processor using %s! %s", hostVerifyInfo.AesKey, err)
+			loger.Log.Errorf("NewCommandProcess: Error creating instruction processor using %s! %s", hostVerifyInfo.AesKey, err)
 			return
 		}
 	} else {
@@ -53,7 +53,7 @@ func NewCommandProcess(host string, dataSocket, commandSocket net.Conn, passiveC
 		CreateTime:     time.Now(),
 		CommandProcess: &cp,
 	}
-	logrus.Debugf("NewCommandProcess: A passive connection for %s has been created.", host)
+	loger.Log.Debugf("NewCommandProcess: A passive connection for %s has been created.", host)
 
 	var wait sync.WaitGroup
 	wait.Add(2)
@@ -80,6 +80,6 @@ func NewCommandProcess(host string, dataSocket, commandSocket net.Conn, passiveC
 		delete(passiveConnectManage, host)
 	}
 
-	logrus.Debugf("NewCommandProcess: Passive connection disconnected from host %s", host)
+	loger.Log.Debugf("NewCommandProcess: Passive connection disconnected from host %s", host)
 	return
 }

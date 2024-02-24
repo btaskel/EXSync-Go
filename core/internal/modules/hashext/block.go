@@ -32,5 +32,5 @@ func GetFileBlockHash(path string) (blockHash, totalHash string, err error) {
 			return "", "", err
 		}
 	}
-
+	return
 }

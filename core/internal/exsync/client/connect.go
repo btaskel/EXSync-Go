@@ -4,9 +4,9 @@ import (
 	"EXSync/core/internal/config"
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/socket"
+	loger "EXSync/core/log"
 	"EXSync/core/option/exsync/comm"
 	serverOption "EXSync/core/option/exsync/server"
-	"github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -19,7 +19,7 @@ import (
 //		passwordSha384 := hashext.GetSha384(config.Config.Server.Addr.Password)
 //		base64EncryptLocalID, err := c.AesGCM.B64GCMEncrypt([]byte(c.ID))
 //		if err != nil {
-//			logrus.Debug("connectVerify: Encryption base64EncryptLocalID failed!")
+//			loger.Log.Debug("connectVerify: Encryption base64EncryptLocalID failed!")
 //			return false
 //		}
 //		replyCommand := comm.Command{
@@ -33,24 +33,24 @@ import (
 //		}
 //		result, err := socket.SendCommandNoTimeDict(c.dataSocket, replyCommand, true)
 //		if err != nil {
-//			logrus.Debugf("connectVerify: Sending data failed! %s", err)
+//			loger.Log.Debugf("connectVerify: Sending data failed! %s", err)
 //			return false
 //		}
 //		// 6.远程发送状态和id:获取通过状态和远程id 验证结束
 //		data, ok := result["data"].(map[string]any)
 //		if !ok {
-//			logrus.Debug("connectVerify: Verifying remote connection missing parameter data")
+//			loger.Log.Debug("connectVerify: Verifying remote connection missing parameter data")
 //			return false
 //		}
 //		encryptRemoteID, ok := data["ID"].(string)
 //		if !ok {
-//			logrus.Debug("connectVerify: Verifying remote connection missing parameter ID")
+//			loger.Log.Debug("connectVerify: Verifying remote connection missing parameter ID")
 //			return false
 //		}
 //
 //		remoteID, err := c.AesGCM.B64GCMDecrypt(encryptRemoteID)
 //		if err != nil {
-//			logrus.Debugf("connectVerify: B64GCMDecrypt encryptRemoteID failed! %s", err)
+//			loger.Log.Debugf("connectVerify: B64GCMDecrypt encryptRemoteID failed! %s", err)
 //			return false
 //		}
 //
@@ -59,16 +59,16 @@ import (
 //		case "success":
 //			c.AesGCM, err = encryption.NewGCM(config.Config.Server.Addr.Password)
 //			if err != nil {
-//				logrus.Debugf("connectVerify: NewGCM Password failed! %s", err)
+//				loger.Log.Debugf("connectVerify: NewGCM Password failed! %s", err)
 //				return false
 //			}
 //			c.RemoteID = string(remoteID)
 //			return true
 //		case "fail":
-//			logrus.Errorf("connectVerify: Failed to verify server %s password!", c.IP)
+//			loger.Log.Errorf("connectVerify: Failed to verify server %s password!", c.IP)
 //			return false
 //		default:
-//			logrus.Errorf("connectVerify: Unknown parameter obtained while verifying server %s password!", c.IP)
+//			loger.Log.Errorf("connectVerify: Unknown parameter obtained while verifying server %s password!", c.IP)
 //			return false
 //		}
 //
@@ -82,29 +82,29 @@ import (
 //		// 将 PEM 块解析为公钥
 //		publicKeyBlock, _ := pem.Decode(publicKey)
 //		if publicKeyBlock == nil {
-//			logrus.Debug("connectVerifyNoPassword: failed to decode PEM block containing public key!")
+//			loger.Log.Debug("connectVerifyNoPassword: failed to decode PEM block containing public key!")
 //			return false
 //		}
 //		publicKeyInterface, err := x509.ParsePKIXPublicKey(publicKeyBlock.Bytes)
 //		if err != nil {
-//			logrus.Debugf("connectVerifyNoPassword: failed to parse RSA public key: %v", err)
+//			loger.Log.Debugf("connectVerifyNoPassword: failed to parse RSA public key: %v", err)
 //			return false
 //		}
 //		// 将公钥转换为 *rsa.PublicKey
 //		aesPublicKey, ok := publicKeyInterface.(*rsa.PublicKey)
 //		if !ok {
-//			logrus.Debug("connectVerifyNoPassword: not an RSA public key")
+//			loger.Log.Debug("connectVerifyNoPassword: not an RSA public key")
 //			return false
 //		}
 //		sessionPassword := hashext.GetRandomStr(16)
 //		base64EncryptSessionPassword, err := encryption.RsaEncryptBase64([]byte(sessionPassword), aesPublicKey)
 //		if err != nil {
-//			logrus.Debugf("connectVerifyNoPassword: Encrypting base64EncryptSessionPassword with publicKey %s failed!", publicKey)
+//			loger.Log.Debugf("connectVerifyNoPassword: Encrypting base64EncryptSessionPassword with publicKey %s failed!", publicKey)
 //			return false
 //		}
 //		base64EncryptSessionID, err := encryption.RsaEncryptBase64([]byte(c.ID), aesPublicKey)
 //		if err != nil {
-//			logrus.Debugf("connectVerifyNoPassword: Encrypting base64EncryptSessionID with publicKey %s failed!", publicKey)
+//			loger.Log.Debugf("connectVerifyNoPassword: Encrypting base64EncryptSessionID with publicKey %s failed!", publicKey)
 //			return false
 //		}
 //		replyCommand := comm.Command{
@@ -118,27 +118,27 @@ import (
 //		}
 //		result, err := socket.SendCommandNoTimeDict(c.dataSocket, replyCommand, true)
 //		if err != nil {
-//			logrus.Debugf("connectVerifyNoPassword: Sending data failed! %s", err)
+//			loger.Log.Debugf("connectVerifyNoPassword: Sending data failed! %s", err)
 //			return false
 //		}
 //		data, ok := result["data"].(map[string]any)
 //		if !ok {
-//			logrus.Debug("connectVerifyNoPassword: Verifying remote connection missing parameter data")
+//			loger.Log.Debug("connectVerifyNoPassword: Verifying remote connection missing parameter data")
 //			return false
 //		}
 //		remoteID, ok := data["id"].(string)
 //		if !ok {
-//			logrus.Debug("connectVerifyNoPassword: Verifying remote connection missing parameter remoteID")
+//			loger.Log.Debug("connectVerifyNoPassword: Verifying remote connection missing parameter remoteID")
 //			return false
 //		}
 //		gcm, err := encryption.NewGCM(sessionPassword)
 //		if err != nil {
-//			logrus.Debug("connectVerifyNoPassword: NewGCM: Failed to create Cipher with key!")
+//			loger.Log.Debug("connectVerifyNoPassword: NewGCM: Failed to create Cipher with key!")
 //			return false
 //		}
 //		remoteID, err = gcm.StrB64GCMDecrypt(remoteID)
 //		if err != nil {
-//			logrus.Debug("connectVerifyNoPassword: Encryption remoteID failed!")
+//			loger.Log.Debug("connectVerifyNoPassword: Encryption remoteID failed!")
 //			return false
 //		}
 //		c.RemoteID = remoteID
@@ -151,7 +151,7 @@ import (
 //		_, err := net.DialTimeout("tcp", address, time.Duration(4)*time.Second)
 //		if err != nil {
 //			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-//				logrus.Debugf("direct: Connection to %s failed", c.IP)
+//				loger.Log.Debugf("direct: Connection to %s failed", c.IP)
 //				//error = errors.New("timeout")
 //				return false
 //			} else {
@@ -166,7 +166,7 @@ import (
 //	check := func() bool {
 //		for i := 0; i < 3; i++ {
 //			// 1.本地发送验证指令:发送指令开始进行验证
-//			logrus.Debugf("check: Connecting to server %s for the %vth time", c.IP, i)
+//			loger.Log.Debugf("check: Connecting to server %s for the %vth time", c.IP, i)
 //			replyCommand := comm.Command{
 //				Command: "comm",
 //				Type:    "verifyConnect",
@@ -193,7 +193,7 @@ import (
 //					return false
 //				}
 //			} else if publicKeyOk && !remotePasswordSha256Ok {
-//				logrus.Infof("check: Target server %s has no password set.", c.IP)
+//				loger.Log.Infof("check: Target server %s has no password set.", c.IP)
 //				if connectVerifyNoPassword([]byte(publicKey)) {
 //					return true
 //				} else {
@@ -201,7 +201,7 @@ import (
 //				}
 //			}
 //		}
-//		logrus.Debugf("check: Verification failed with host X")
+//		loger.Log.Debugf("check: Verification failed with host X")
 //		return false
 //	}
 //	if c.AesGCM == nil {
@@ -274,10 +274,10 @@ func (c *Client) connectRemoteCommandSocket() (ok bool, err error) {
 	} else {
 		// 有密码验证
 		if requirePassword() {
-			logrus.Infof("Active: Local password verification with remote host %s was successful.", c.IP)
+			loger.Log.Infof("Active: Local password verification with remote host %s was successful.", c.IP)
 			return true, nil
 		} else {
-			logrus.Infof("Active: Local password verification with remote host %s failed.", c.IP)
+			loger.Log.Infof("Active: Local password verification with remote host %s failed.", c.IP)
 			return false, nil
 		}
 	}

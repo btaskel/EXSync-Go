@@ -4,8 +4,8 @@ import (
 	"EXSync/core/internal/config"
 	"EXSync/core/internal/exsync/client"
 	"EXSync/core/internal/modules/lan"
+	loger "EXSync/core/log"
 	serverOption "EXSync/core/option/exsync/server"
-	"github.com/sirupsen/logrus"
 	"strings"
 	"sync"
 	"time"
@@ -38,22 +38,22 @@ func (s *Server) getDevices() {
 	scan := config.Config.Server.Scan
 	switch strings.ToLower(scan.Type) {
 	case "lan":
-		logrus.Debug("scan: LAN Searching for IP is starting")
+		loger.Log.Debug("scan: LAN Searching for IP is starting")
 		devices, err := lan.ScanDevices()
 		if err != nil {
 			return
 		}
-		logrus.Debug("scan: LAN Search for IP completed")
+		loger.Log.Debug("scan: LAN Search for IP completed")
 		for _, device := range devices {
 			ipSet[device] = struct{}{}
 		}
 	case "white":
-		logrus.Debug("scan: White List. Search for IP completed")
+		loger.Log.Debug("scan: White List. Search for IP completed")
 		for _, device := range scan.Devices {
 			ipSet[device] = struct{}{}
 		}
 	case "black":
-		logrus.Debug("scan: Black List. Search for IP completed")
+		loger.Log.Debug("scan: Black List. Search for IP completed")
 		for _, device := range scan.Devices {
 			ipSet[device] = struct{}{}
 		}

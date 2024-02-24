@@ -2,8 +2,8 @@ package proxy
 
 import (
 	"EXSync/core/internal/config"
+	loger "EXSync/core/log"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/net/proxy"
 	"net"
 	"os"
@@ -17,7 +17,7 @@ func setProxy() proxy.Dialer {
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
 	socks5, err := proxy.SOCKS5("tcp", addr, nil, dialer)
 	if err != nil {
-		logrus.Fatalf("setProxy: Proxy server settings error! %s", addr)
+		loger.Log.Fatalf("setProxy: Proxy server settings error! %s", addr)
 		os.Exit(1)
 	}
 	return socks5

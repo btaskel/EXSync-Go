@@ -5,16 +5,16 @@ import (
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/socket"
 	"EXSync/core/internal/modules/sqlt"
+	loger "EXSync/core/log"
 	"EXSync/core/option/exsync/comm"
 	"EXSync/core/option/exsync/index"
 	"encoding/json"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 	"io"
 	"net"
 	"os"
-	"path"
+	"path/filepath"
 	"sync"
 )
 
@@ -48,30 +48,15 @@ func (c *Base) sendData(file *os.File, fileMark string, dataBlock, total int64) 
 func (c *Base) GetFile(data map[string]any) {
 	// 权限验证
 	if !CheckPermission(c.VerifyManage[c.Ip], []string{comm.PermRead}) {
-		logrus.Warningf("Passive-GetFile-Permission: Host %s is attempting an unauthorized operation <read> !", c.Ip)
+		loger.Log.Warningf("Passive-GetFile-Permission: Host %s is attempting an unauthorized operation <read> !", c.Ip)
 		return
 	}
 
-	pathList, ok := data["pathList"].([]string)
+	files, ok := data["files"].(map[string]any)
 	if !ok {
 		return
 	}
-	hashList, ok := data["hashList"].([]string)
-	if !ok {
-		return
-	}
-	sizeList, ok := data["sizeList"].([]int64)
-	if !ok {
-		return
-	}
-	markList, ok := data["markList"].([]string)
-	if !ok {
-		return
-	}
-	replyMarkList, ok := data["replyMarkList"].([]string)
-	if !ok {
-		return
-	}
+
 	spaceName, ok := data["spaceName"].(string)
 	if !ok {
 		return
@@ -84,14 +69,25 @@ func (c *Base) GetFile(data map[string]any) {
 
 	dataBlock := int64(config.PacketSize - 8 - c.EncryptionLoss)
 
-	subRoutine := func(i int, wait *sync.WaitGroup) {
+	subRoutine := func(remoteRelPath string, fileInfo map[string]any, wait *sync.WaitGroup) {
 		defer wait.Done()
-		remoteRelPath := pathList[i]
-		remoteAbsPath := path.Join(spacePath, remoteRelPath)
-		remoteFileHash := hashList[i]
-		remoteFileSize := sizeList[i]
-		fileMark := markList[i]
-		replyMark := replyMarkList[i]
+		remoteAbsPath := filepath.Join(spacePath, remoteRelPath)
+		remoteFileHash, ok := fileInfo["hash"].(string)
+		if !ok {
+			return
+		}
+		remoteFileSize, ok := fileInfo["size"].(int64)
+		if !ok {
+			return
+		}
+		fileMark, ok := fileInfo["fileMark"].(string)
+		if !ok {
+			return
+		}
+		replyMark, ok := fileInfo["replyMark"].(string)
+		if !ok {
+			return
+		}
 
 		session, err := socket.NewSession(c.TimeChannel, c.DataSocket, nil, replyMark, c.AesGCM)
 		if err != nil {
@@ -151,7 +147,7 @@ func (c *Base) GetFile(data map[string]any) {
 
 				// 判断为需要续写的文件
 				var continueWrite bool
-				if hashList[i] == fmt.Sprintf("%X", hasher.Sum(nil)) {
+				if remoteFileHash == fmt.Sprintf("%X", hasher.Sum(nil)) {
 					continueWrite = true
 				} else {
 					continueWrite = false
@@ -182,10 +178,10 @@ func (c *Base) GetFile(data map[string]any) {
 					if err != nil {
 						netErr, ok := err.(net.Error)
 						if ok && netErr.Timeout() {
-							logrus.Errorf("passive-GetFile - Sync Space %s :Sending %s file timeout!", space.SpaceName, remoteAbsPath)
+							loger.Log.Errorf("passive-GetFile - Sync Space %s :Sending %s file timeout!", space.SpaceName, remoteAbsPath)
 							return
 						} else {
-							logrus.Warningf("passive-GetFile - Sync Space %s :File %s transfer failed due to unexpected disconnection from host %s.", space.SpaceName, remoteAbsPath, c.Ip)
+							loger.Log.Warningf("passive-GetFile - Sync Space %s :File %s transfer failed due to unexpected disconnection from host %s.", space.SpaceName, remoteAbsPath, c.Ip)
 							return
 						}
 					}
@@ -208,10 +204,10 @@ func (c *Base) GetFile(data map[string]any) {
 				if err != nil {
 					netErr, ok := err.(net.Error)
 					if ok && netErr.Timeout() {
-						logrus.Errorf("passive-GetFile - Sync Space %s :Sending %s file timeout!", space.SpaceName, remoteAbsPath)
+						loger.Log.Errorf("passive-GetFile - Sync Space %s :Sending %s file timeout!", space.SpaceName, remoteAbsPath)
 						return
 					} else {
-						logrus.Warningf("passive-GetFile - Sync Space %s :File %s transfer failed due to unexpected disconnection from host %s.", space.SpaceName, remoteAbsPath, c.Ip)
+						loger.Log.Warningf("passive-GetFile - Sync Space %s :File %s transfer failed due to unexpected disconnection from host %s.", space.SpaceName, remoteAbsPath, c.Ip)
 						return
 					}
 				}
@@ -228,13 +224,13 @@ func (c *Base) GetFile(data map[string]any) {
 	}
 
 	var wait sync.WaitGroup
-	fileCount := len(pathList)
+	fileCount := len(files)
 	wait.Add(fileCount)
-	for i := 0; i > len(pathList); i++ {
-		go subRoutine(i, &wait)
+	for filePath, fileInfo := range files {
+		go subRoutine(filePath, fileInfo.(map[string]any), &wait)
 	}
 	wait.Wait()
-	logrus.Debugf("passive-GetFile Sync Space %s :File a, b begins to transfer", spaceName)
+	loger.Log.Debugf("passive-GetFile Sync Space %s :File a, b begins to transfer", spaceName)
 }
 
 //// GetFile 客户端从服务端接收数据
@@ -267,7 +263,7 @@ func (c *Base) GetFile(data map[string]any) {
 //	}
 //
 //	localSpace := config.UserData[spacename]
-//	fileAbsPath := path.Join(localSpace.Path, fileRelPath)
+//	fileAbsPath := filepath.Join(localSpace.Path, fileRelPath)
 //
 //	dataBlock := int64(config.PacketSize - 8 - c.EncryptionLoss) // fileMark 8 + GCM-tag 16 + GCM-nonce 12
 //
@@ -437,15 +433,15 @@ func (c *Base) PostFile(data map[string]any, replyMark string, db *gorm.DB) {
 
 	var status = ""
 
-	fileAbsPath := path.Join(localSpace.Path, remoteFileRelPath)
+	fileAbsPath := filepath.Join(localSpace.Path, remoteFileRelPath)
 	if len(remoteFileHash) != 32 {
 		status = "File hash too long!"
 	}
 
 	// 获取db
-	//spaceDb, err := index.Index.GetIndex(path.Join(localSpace.Path, ".\\sync\\info\\files.db"))
+	//spaceDb, err := index.Index.GetIndex(filepath.Join(localSpace.Path, ".\\sync\\info\\files.db"))
 	//if err != nil {
-	//	logrus.Errorf("Host %s failed to open the index database for %s!", c.Ip, remoteSpace)
+	//	loger.Log.Errorf("Host %s failed to open the index database for %s!", c.Ip, remoteSpace)
 	//}
 
 	var file index.Index
@@ -457,7 +453,7 @@ func (c *Base) PostFile(data map[string]any, replyMark string, db *gorm.DB) {
 	//	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 	//		size = 0
 	//	} else {
-	//		logrus.Errorf("")
+	//		loger.Log.Errorf("")
 	//	}
 	//}
 	if file.Path == "" {
@@ -506,7 +502,7 @@ func (c *Base) PostFile(data map[string]any, replyMark string, db *gorm.DB) {
 			readData := remoteFileSize
 			f, err := os.OpenFile(fileAbsPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 			if err != nil {
-				logrus.Errorf("PostFile: Error opening or creating file:%s", err)
+				loger.Log.Errorf("PostFile: Error opening or creating file:%s", err)
 				return
 			}
 			defer f.Close()
@@ -532,7 +528,7 @@ func (c *Base) PostFile(data map[string]any, replyMark string, db *gorm.DB) {
 			err = os.Remove(fileAbsPath)
 			if err != nil {
 				// 数据不同步导致问题
-				logrus.Debugf("Error removing file:%s", err)
+				loger.Log.Debugf("Error removing file:%s", err)
 				return
 			}
 		}

@@ -2,6 +2,8 @@ package config
 
 import (
 	"EXSync/core/internal/modules/hashext"
+	"EXSync/core/internal/modules/pathext"
+	loger "EXSync/core/log"
 	"EXSync/core/option/config"
 	"database/sql"
 	"encoding/json"
@@ -22,6 +24,7 @@ var (
 
 // NewConfig 启动时进行初始化读取
 func newConfig() *configOption.ConfigStruct {
+	loger.Log = loger.NewLog()
 	config, err := LoadConfig()
 	if err != nil {
 		return nil
@@ -39,7 +42,7 @@ func newUserData(config *configOption.ConfigStruct) map[string]configOption.UdDi
 		if _, err := os.Stat(savePath); os.IsNotExist(err) {
 			err = os.MkdirAll(savePath, 0755)
 			if err != nil {
-				logrus.Fatalf("newUserData: Failed to create index for syncspace %s! %s", userdata.Spacename, err)
+				loger.Log.Fatalf("newUserData: Failed to create index for syncspace %s! %s", userdata.Spacename, err)
 				os.Exit(1)
 			}
 		}
@@ -47,7 +50,7 @@ func newUserData(config *configOption.ConfigStruct) map[string]configOption.UdDi
 		// 打开数据库，存储数据库对象
 		db, err := sql.Open("sqlite", path.Join(savePath, "sync.db"))
 		if err != nil {
-			logrus.Fatalf("newUserData: Failed to open database %s! %s", userdata.Spacename, err)
+			loger.Log.Fatalf("newUserData: Failed to open database %s! %s", userdata.Spacename, err)
 			os.Exit(1)
 		}
 
@@ -69,27 +72,26 @@ func newUserData(config *configOption.ConfigStruct) map[string]configOption.UdDi
 			)`
 			statement, err := db.Prepare(createTable)
 			if err != nil {
-				logrus.Fatalf("newUserData: Failed to create file index table for synchronization space %s! %s", userdata.Spacename, err)
+				loger.Log.Fatalf("newUserData: Failed to create file index table for synchronization space %s! %s", userdata.Spacename, err)
 				os.Exit(1)
 			}
 			_, err = statement.Exec()
 			if err != nil {
-				logrus.Fatalf("newUserData: Failed to create file index table for synchronization space %s! %s", userdata.Spacename, err)
+				loger.Log.Fatalf("newUserData: Failed to create file index table for synchronization space %s! %s", userdata.Spacename, err)
 				os.Exit(1)
 			}
 		case nil:
 			// 表存在
 		default:
-			logrus.Fatal(err)
+			loger.Log.Fatal(err)
 		}
 
 		userDataDict[userdata.Spacename] = configOption.UdDict{
-			Path:      userdata.Path,
-			Interval:  userdata.Interval,
-			Autostart: userdata.Autostart,
-			Active:    userdata.Active,
-			Db:        db,
-			Devices:   userdata.Devices,
+			Path:     userdata.Path,
+			Interval: userdata.Interval,
+			Active:   userdata.Active,
+			Db:       db,
+			Devices:  userdata.Devices,
 		}
 	}
 	return userDataDict
@@ -119,56 +121,58 @@ func LoadConfig() (result *configOption.ConfigStruct, err error) {
 
 	switch strings.ToLower(config.Log.LogLevel) {
 	case "debug":
-		config.Log.LogLevel = "debug"
+		loger.Log.Level = logrus.DebugLevel
 	case "info":
-		config.Log.LogLevel = "info"
+		loger.Log.Level = logrus.InfoLevel
 	case "warning":
-		config.Log.LogLevel = "warning"
+		loger.Log.Level = logrus.WarnLevel
 	case "error":
-		config.Log.LogLevel = "error"
-	case "none":
-		config.Log.LogLevel = "none"
+		loger.Log.Level = logrus.ErrorLevel
+	case "fatal":
+		loger.Log.Level = logrus.FatalLevel
+	case "panic":
+		loger.Log.Level = logrus.PanicLevel
 	default:
-		config.Log.LogLevel = "info"
+		loger.Log.Level = logrus.InfoLevel
 	}
 
 	// server-addr-id
 	if config.Server.Addr.ID != "" {
 		if len(config.Server.Addr.ID) < 4 {
-			logrus.Warning("If the device ID length is less than 4, there may be a security risk.")
+			loger.Log.Warning("If the device ID length is less than 4, there may be a security risk.")
 		}
 	} else {
-		logrus.Info("The device ID is already random, which will hide your device.")
+		loger.Log.Info("The device ID is already random, which will hide your device.")
 	}
 
 	// server-addr-ip
 	ip := net.ParseIP(config.Server.Addr.IP)
 	if ip == nil {
-		logrus.Error("The host IP address is not ipv4 or ipv6!")
-		logrus.Warning("The host IP address is not filled in and has been defaulted to 0.0.0.0!")
+		loger.Log.Error("The host IP address is not ipv4 or ipv6!")
+		loger.Log.Warning("The host IP address is not filled in and has been defaulted to 0.0.0.0!")
 		config.Server.Addr.IP = "0.0.0.0"
 	} else {
 		if ip.To4() != nil {
-			logrus.Debug("A valid IPv4 address")
+			loger.Log.Debug("A valid IPv4 address")
 		} else if ip.To16() != nil {
-			logrus.Debug("A valid IPv6 address")
+			loger.Log.Debug("A valid IPv6 address")
 		}
 	}
 
 	// server-addr-port
 	if config.Server.Addr.Port < 1024 && config.Server.Addr.Port > 65535 {
-		logrus.Warning("Port number setting error! Has been defaulted to 5001!")
+		loger.Log.Warning("Port number setting error! Has been defaulted to 5001!")
 		config.Server.Addr.Port = 5001
 	}
 
 	// server-addr-password
 	if config.Server.Addr.Password == "" {
-		logrus.Warning("The host has not set a password, and RSA&AES will be used for encryption during transmission")
+		loger.Log.Warning("The host has not set a password, and RSA&AES will be used for encryption during transmission")
 	} else if len(config.Server.Addr.Password) < 4 {
-		logrus.Error("Password length is less than 4! Should be between 4 and 48 characters!")
+		loger.Log.Error("Password length is less than 4! Should be between 4 and 48 characters!")
 		os.Exit(1)
 	} else if len(config.Server.Addr.Password) > 48 {
-		logrus.Error("The password length is greater than 48! Should be between 4 and 48 characters!")
+		loger.Log.Error("The password length is greater than 48! Should be between 4 and 48 characters!")
 		os.Exit(1)
 	}
 
@@ -188,19 +192,19 @@ func LoadConfig() (result *configOption.ConfigStruct, err error) {
 	case "black":
 		config.Server.Scan.Type = "black"
 	default:
-		logrus.Warning("Scan: No device discovery mode specified, default to LAN mode.")
+		loger.Log.Warning("Scan: No device discovery mode specified, default to LAN mode.")
 		config.Server.Scan.Type = "lan"
 	}
 
 	// server-scan-max
 	if config.Server.Scan.Max < 1 {
-		logrus.Error("The maximum number of devices cannot be less than 1!")
+		loger.Log.Error("The maximum number of devices cannot be less than 1!")
 		os.Exit(1)
 	}
 
 	// server-scan-device
 	if config.Server.Scan.Type != "lan" && len(config.Server.Scan.Devices) == 0 {
-		logrus.Errorf("Scan mode is %s, but device list is empty", config.Server.Scan.Type)
+		loger.Log.Errorf("Scan mode is %s, but device list is empty", config.Server.Scan.Type)
 	}
 
 	// server-proxy-enabled
@@ -208,18 +212,18 @@ func LoadConfig() (result *configOption.ConfigStruct, err error) {
 		// server-proxy-hostname
 
 		if net.ParseIP(config.Server.Proxy.Hostname) == nil {
-			logrus.Errorf("Invalid proxy server IP: %s", config.Server.Proxy.Hostname)
+			loger.Log.Errorf("Invalid proxy server IP: %s", config.Server.Proxy.Hostname)
 		}
 
 		// server-proxy-port
 		if config.Server.Proxy.Port < 1024 && config.Server.Proxy.Port > 65536 {
-			logrus.Error("Proxy: Port number setting error!")
+			loger.Log.Error("Proxy: Port number setting error!")
 		}
 		// server-proxy-username
 		if config.Server.Proxy.Username != "" {
 			// server-proxy-password
 			if config.Server.Proxy.Password == "" {
-				logrus.Error("Missing proxy server username and password!")
+				loger.Log.Error("Missing proxy server username and password!")
 			}
 		}
 
@@ -228,29 +232,29 @@ func LoadConfig() (result *configOption.ConfigStruct, err error) {
 		userdataList := make([]string, 8)
 		for _, userdata := range config.Userdata {
 			if userdata.Spacename == "" {
-				logrus.Errorf("The %v th sync space is named empty! This space will not start!", count)
+				loger.Log.Errorf("The %v th sync space is named empty! This space will not start!", count)
 			} else {
 				for _, s := range userdataList {
 					if s == userdata.Spacename {
-						logrus.Errorf("Duplicate naming of synchronization space %v!", s)
+						loger.Log.Errorf("Duplicate naming of synchronization space %v!", s)
 						os.Exit(1)
 					}
 				}
 			}
 			spacenameLength := len(userdata.Spacename)
 			if spacenameLength > 20 && spacenameLength < 2 {
-				logrus.Warningf("The length of the synchronization space %s name should be between 2 and 20 characters!", userdata.Spacename)
+				loger.Log.Warningf("The length of the synchronization space %s name should be between 2 and 20 characters!", userdata.Spacename)
 			}
 			userdataList = append(userdataList, userdata.Spacename)
 			if _, err = os.Stat(userdata.Path); err != nil {
 				if os.IsNotExist(err) {
-					logrus.Errorf("The sync space path named %s is invalid, it will not work!", userdata.Spacename)
+					loger.Log.Errorf("The sync space path named %s is invalid, it will not work!", userdata.Spacename)
 					os.Exit(1)
 				}
 			}
 			if userdata.Interval < 1 {
 				config.Userdata[count].Interval = 30
-				logrus.Warningf("The time interval setting for %s is incorrect and has been reset to 30 seconds!", userdata.Spacename)
+				loger.Log.Warningf("The time interval setting for %s is incorrect and has been reset to 30 seconds!", userdata.Spacename)
 			}
 			count += 1
 		}
@@ -354,7 +358,6 @@ func CreateConfig() (err error) {
 			Spacename string   `json:"spacename"`
 			Path      string   `json:"path"`
 			Interval  int      `json:"interval"`
-			Autostart bool     `json:"autostart"`
 			Active    bool     `json:"active"`
 			Devices   []string `json:"devices"`
 		}{
@@ -362,7 +365,6 @@ func CreateConfig() (err error) {
 				Spacename: "",
 				Path:      "",
 				Interval:  30,
-				Autostart: true,
 				Active:    true,
 				Devices:   []string{""},
 			},
@@ -371,14 +373,13 @@ func CreateConfig() (err error) {
 	}
 
 	// 创建一个文件
+	pathext.MakeDir(ConfigPath)
 	configJsonPath := filepath.Join(ConfigPath, "config.json")
-	if _, err = os.Stat(configJsonPath); !os.IsNotExist(err) {
-		return
-	}
+
 	file, err := os.Create(configJsonPath)
 	if err != nil {
 		fmt.Println(err)
-		logrus.Debugf("Error creating config file:%s", err)
+		loger.Log.Debugf("Error creating config file:%s", err)
 		return
 	}
 	defer file.Close()
@@ -388,7 +389,7 @@ func CreateConfig() (err error) {
 	encoder.SetIndent("", "    ")
 	err = encoder.Encode(config)
 	if err != nil {
-		logrus.Debugf("Error encoding config to JSON:%s", err)
+		loger.Log.Debugf("Error encoding config to JSON:%s", err)
 	}
 	return
 }
