@@ -5,6 +5,7 @@ import (
 	"EXSync/core/internal/modules/timechannel"
 	loger "EXSync/core/log"
 	"EXSync/core/option/exsync/comm"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"net"
@@ -33,7 +34,7 @@ type Session struct {
 func NewSession(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket net.Conn, mark string, aesGcm *encryption.Gcm) (*Session, error) {
 
 	// 检查mark是否正常
-	if len(mark) != 8 {
+	if len(mark) != 6 {
 		return nil, errors.New("SocketSession: Mark标识缺少")
 	}
 
@@ -93,14 +94,23 @@ func (s *Session) SendCommand(data comm.Command, output, encrypt bool) (result m
 			panic("sendNoTimeDict: 命令发送时无字节")
 		}
 	}
+	length := len(commandJson) + 6
 	var preparedData []byte
 	if s.aesGCM != nil {
-		preparedData, err = s.aesGCM.AesGcmEncrypt(append(s.mark, commandJson...))
+		// 追加
+		length += 28
+		b := make([]byte, 2)
+		binary.BigEndian.PutUint16(b, uint16(length))
+		mark := append(s.mark, b...)
+		preparedData, err = s.aesGCM.AesGcmEncrypt(append(mark, commandJson...))
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		preparedData = append(s.mark, commandJson...)
+		b := make([]byte, 2)
+		binary.BigEndian.PutUint16(b, uint16(length))
+		mark := append(s.mark, b...)
+		preparedData = append(mark, commandJson...)
 	}
 
 	switch s.method {
@@ -124,10 +134,12 @@ func (s *Session) SendCommand(data comm.Command, output, encrypt bool) (result m
 // SendDataP SendData的性能版本
 func (s *Session) SendDataP(data []byte) (err error) {
 	var byteData []byte
+	length := len(data) + 6
 	if s.aesGCM == nil {
 		byteData = append(s.mark, data...)
 	} else {
 		byteData, err = s.aesGCM.AesGcmEncrypt(append(s.mark, data...))
+		length += 28
 	}
 	_, err = s.dataSocket.Write(byteData)
 	if err != nil {
@@ -180,6 +192,7 @@ func (s *Session) sendNoTimeDict(conn net.Conn, data []byte, output bool) (map[s
 //	command: 设置发送的命令, 如果为字典类型则转换为json发送。
 //	return: 如果Output=True在发送数据后等待对方返回一条数据; 否则仅发送
 func (s *Session) sendTimeDict(conn net.Conn, command []byte, output bool) (map[string]any, error) {
+
 	_, err := conn.Write(command)
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {

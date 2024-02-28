@@ -27,6 +27,7 @@ func Task(ip string) (onlineHosts []string) {
 	//创建chan生产者
 	for i := 1; i < 256; i++ {
 		host := fmt.Sprintf("%s.%d", ip, i)
+		fmt.Println(host)
 		task := Workdist{
 			Host: host,
 		}

@@ -52,7 +52,6 @@ type UdDict struct {
 	SpaceName string
 	Path      string
 	Interval  int
-	Autostart bool
 	Active    bool
 	Db        *sql.DB
 	Devices   []string

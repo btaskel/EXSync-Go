@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	_ "github.com/glebarez/go-sqlite"
-	"github.com/sirupsen/logrus"
 	"net"
 	"os"
 	"path"
@@ -104,7 +103,7 @@ func LoadConfig() (result *configOption.ConfigStruct, err error) {
 		return nil, err
 	}
 
-	file, err := os.ReadFile(filepath.Join(ConfigPath, "config.json"))
+	file, err := os.ReadFile(filepath.Join(ConfigSavePath, "config.json"))
 	if err != nil {
 		return
 	}
@@ -115,26 +114,7 @@ func LoadConfig() (result *configOption.ConfigStruct, err error) {
 	}
 
 	// log-logLevel
-	if config.Log.LogLevel == "" {
-		config.Log.LogLevel = "info"
-	}
-
-	switch strings.ToLower(config.Log.LogLevel) {
-	case "debug":
-		loger.Log.Level = logrus.DebugLevel
-	case "info":
-		loger.Log.Level = logrus.InfoLevel
-	case "warning":
-		loger.Log.Level = logrus.WarnLevel
-	case "error":
-		loger.Log.Level = logrus.ErrorLevel
-	case "fatal":
-		loger.Log.Level = logrus.FatalLevel
-	case "panic":
-		loger.Log.Level = logrus.PanicLevel
-	default:
-		loger.Log.Level = logrus.InfoLevel
-	}
+	loger.FormatLevel(config.Log.LogLevel)
 
 	// server-addr-id
 	if config.Server.Addr.ID != "" {
@@ -373,8 +353,8 @@ func CreateConfig() (err error) {
 	}
 
 	// 创建一个文件
-	pathext.MakeDir(ConfigPath)
-	configJsonPath := filepath.Join(ConfigPath, "config.json")
+	pathext.MakeDir(ConfigSavePath)
+	configJsonPath := filepath.Join(ConfigSavePath, "config.json")
 
 	file, err := os.Create(configJsonPath)
 	if err != nil {

@@ -31,7 +31,7 @@ func (t *TimeChannel) HasKey(mark string) (ok bool) {
 
 // CreateRecv 创建一个数据流接收队列
 func (t *TimeChannel) CreateRecv(mark string) (err error) {
-	if _, ok := t.channelDict[mark]; !ok && len(mark) == 8 {
+	if _, ok := t.channelDict[mark]; !ok && len(mark) == 6 {
 		t.channelDict[mark] = make(chan []byte, 65535)
 		return nil
 	}
@@ -40,7 +40,7 @@ func (t *TimeChannel) CreateRecv(mark string) (err error) {
 
 // Set 在一个channel中写入值
 func (t *TimeChannel) Set(mark string, value []byte) (ok bool) {
-	if _, ok := t.channelDict[mark]; ok && len(mark) == 8 {
+	if _, ok := t.channelDict[mark]; ok && len(mark) == 6 {
 		channel := t.channelDict[mark]
 		channel <- value
 		return true

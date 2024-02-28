@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -592,6 +593,7 @@ func main() {
 	//	fmt.Println(err)
 	//	return
 	//}
+
 	//seek, err := f.Seek(1000, 1)
 	//if err != nil {
 	//	return
@@ -684,6 +686,88 @@ func main() {
 	//	fmt.Println(k)
 	//}
 
+	//f, err := os.OpenFile(".\\test\\test.txt", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0667)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	////f.Write()
+	//f.
+	//os.Create()
+	//file, err := os.OpenFile(".\\test\\test.txt", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
+	//if err != nil {
+	//	return
+	//}
+	//err = file.Truncate(1024 * 1024)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//file.Write([]byte{50, 50})
+	////buf := make([]byte, 512)
+	////file.Read(buf)
+	//currentPosition, err := file.Seek(0, 1)
+	//fmt.Println(currentPosition)
+	//
+	//file.Close()
+	//
+	//f, err := os.OpenFile(".\\test\\test.txt", os.O_TRUNC|os.O_WRONLY, 0666)
+	//if err != nil {
+	//	fmt.Println(err)
+	//}
+	//f.Write([]byte{51, 51})
+	//f.Write([]byte{52, 52})
+	//f.Close()
+	////err = os.Truncate(".\\test\\test.txt", 1024*1024)
+	////fmt.Println(err)
+	//r := strings.NewReader("abcde")
+	//buf := make([]byte, 4)
+	//if _, err := io.ReadFull(r, buf); err != nil {
+	//	log.Fatal(err)
+	//}
+	//bufio.fmt.Println(buf)
+	//addrs, err := net.InterfaceAddrs()
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	////fmt.Println(addrs)
+	//for _, addr := range addrs {
+	//	if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+	//		if ipnet.IP.To4() != nil {
+	//			a := strings.Split(ipnet.IP.String(), ".")
+	//			fmt.Println(a)
+	//
+	//		}
+	//	}
+	//}
+	fmt.Println(^uint64(0) >> 1)
+	fmt.Println(255 * 3)
+	leng := []byte{15, 255} // 1111 1111 0111 1111
+	num := int32(binary.BigEndian.Uint16(leng))
+	fmt.Println(num)
+	//
+	intToByte := 28
+	b := make([]byte, 2)
+	binary.BigEndian.PutUint16(b, uint16(intToByte))
+	fmt.Println(b)
+
+	fmt.Println(5 >> 2)
+
+	//str := "abcdefss"
+	//fmt.Println(str[:6])
+}
+
+func minKey(m map[string]int) string {
+	minV := int(^uint(0) >> 1) // 最大的int值
+	minK := ""
+	for k, v := range m {
+		if v < minV {
+			minV = v
+			minK = k
+		}
+	}
+	return minK
 }
 
 func process() {

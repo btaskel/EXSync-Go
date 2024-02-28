@@ -5,18 +5,26 @@ import (
 	"path/filepath"
 )
 
-// ConfigPath 配置文件存放路径
-// var ConfigPath = ".\\data\\config"
+// ConfigSavePath 配置文件存放路径
+// var ConfigSavePath = ".\\data\\config"
 // var DevelopConfigPath = path.Join("H:\\Go Project\\exsync-go", "data\\config")
 
-var MainPath = "H:\\Go Project\\exsync-go"
-
 var (
-	ConfigPath  = filepath.Join(MainPath, "data\\config")
-	LogSavePath = filepath.Join(MainPath, "data")
+	SpaceMainPath = ".sync" // exsync同步空间保存的主路径
+
+	SpaceInfoPath = filepath.Join(SpaceMainPath, "db") // exsync数据存放路径
 )
 
-// GetWD 获取当前项目目录
+var (
+	MainPath = "H:\\Go Project\\exsync-go" // exsync工作目录
+
+	ConfigSavePath = filepath.Join(MainPath, "data\\config") // 配置文件保存路径
+	LogSavePath    = filepath.Join(MainPath, "data\\logs")   // 日志保存路径
+
+	IndexSavePath = filepath.Join(MainPath, "data\\index")
+)
+
+// GetWD 获取当前项目所在目录
 func GetWD() string {
 	wd, err := os.Getwd()
 	if err != nil {

@@ -12,7 +12,7 @@ func MakeDir(dirPath string) (ok bool) {
 		if errDir != nil {
 			fmt.Println("Error creating directory")
 			fmt.Println(errDir)
-			return
+			return false
 		}
 	}
 	return true

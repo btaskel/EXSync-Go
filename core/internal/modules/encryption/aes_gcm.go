@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"io"
 )
 
@@ -37,14 +36,13 @@ type Gcm struct {
 func (g *Gcm) AesGcmEncrypt(data []byte) (res []byte, err error) {
 	if len(data)-40 > dataLength {
 		loger.Log.Errorf("AesGcmEncrypt: An error occurred while encrypting data!%s", err)
-		return nil, errors.New("lengthError")
+		return nil, errors.New("AesGcmEncrypt: lengthError")
 	} else {
 		nonce := make([]byte, g.aesGCM.NonceSize()) // nonce size: 12, tag size: 16
-		if _, err_ := io.ReadFull(rand.Reader, nonce); err_ != nil {
+		if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
 			loger.Log.Errorf("AesGcmEncrypt: An error occurred while encrypting data!%s", err)
-			return nil, err_
+			return nil, err
 		}
-		fmt.Println("Nonce", len(nonce))
 		ciphertext := g.aesGCM.Seal(nil, nonce, data, nil)
 		return append(nonce, ciphertext...), nil
 	}

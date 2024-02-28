@@ -233,7 +233,7 @@ func (c *Client) connectRemoteCommandSocket() (ok bool, err error) {
 				//"stat":    "",                    // 对于上个请求的状态反馈
 			},
 		}
-		replyMark := hashext.GetRandomStr(8)
+		replyMark := hashext.GetRandomStr(6)
 		s, err := socket.NewSession(c.TimeChannel, nil, c.commandSocket, replyMark, c.aesGcm)
 		if err != nil {
 			return false

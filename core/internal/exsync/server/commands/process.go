@@ -5,6 +5,7 @@ import (
 	"EXSync/core/internal/exsync/server/commands/ext"
 	loger "EXSync/core/log"
 	"EXSync/core/option/exsync/comm"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
@@ -21,11 +22,25 @@ func (c *CommandProcess) recvCommand() {
 		return
 	}
 	var command comm.Command
-	buf := make([]byte, 4096)
+	//buf := make([]byte, 4096)
 	for {
 		if c.close {
 			return
 		}
+
+		lengthBuf := make([]byte, 2)
+		_, err := io.ReadFull(c.CommandSocket, lengthBuf)
+		if err != nil {
+			if err == io.EOF {
+				loger.Log.Debugf("Passive-recvCommand: recvCommand connection disconnected from host %s.", c.IP)
+				c.close = true
+				return
+			} else {
+				continue
+			}
+		}
+
+		buf := make([]byte, binary.BigEndian.Uint16(lengthBuf))
 		n, err := c.CommandSocket.Read(buf)
 		if err != nil {
 			if err == io.EOF {
@@ -54,11 +69,25 @@ func (c *CommandProcess) recvData() {
 	defer func() {
 		c.close = true
 	}()
-	buf := make([]byte, 4096) // 数据接收切片
+
 	for {
 		if c.close {
 			return
 		}
+
+		lengthBuf := make([]byte, 2)
+		_, err := io.ReadFull(c.DataSocket, lengthBuf)
+		if err != nil {
+			if err == io.EOF {
+				loger.Log.Debugf("Passive-recvData: Passive connection disconnected from host %s.", c.IP)
+				c.close = true
+				return
+			} else {
+				continue
+			}
+		}
+
+		buf := make([]byte, binary.BigEndian.Uint16(lengthBuf)) // 数据接收切片
 		n, err := c.DataSocket.Read(buf)
 		if err != nil {
 			if err == io.EOF {

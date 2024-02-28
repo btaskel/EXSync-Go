@@ -11,7 +11,7 @@ import (
 //go test .\hash_test.go .\hash.go
 
 func TestGetRandomStr(t *testing.T) {
-	t.Logf("TestGetRandomStr passed:%v", GetRandomStr(8))
+	t.Logf("TestGetRandomStr passed:%v", GetRandomStr(6))
 }
 
 func TestGetXXHash(t *testing.T) {

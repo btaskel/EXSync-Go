@@ -4,13 +4,13 @@
 **端口设置：**
 
 * 客户端：
-* 指令发送端口：`[random]`
+* 命令发送端口：`[random]`
 * 数据传输端口：`[random]`
 
 
 * 服务端：
 * 数据传输端口：`[server_port]`
-* 指令接收端口：`[server_port + 1]`
+* 命令接收端口：`[server_port + 1]`
 
 ### 大致通讯模型：
 
@@ -19,9 +19,9 @@
     client(主动控制方—连接对方server)      client (主动控制方—连接对方server)
     server(被动控制方-监听所有client)      server (被动控制方-监听所有client)
 
-    Server: CommandSocket持续接收来自Client的指令。
+    Server: CommandSocket持续接收来自Client的命令。
             DataSocket持续接收来自Client的数据并转交给TimeChannel，同时可以主动发送到Client-DataSocket数据。
-    Client: CommandSocket主动向Server-CommandSocket发起指令。
+    Client: CommandSocket主动向Server-CommandSocket发起命令。
             DataSocket主动向Server-DataSocket发送数据，同时可以接收来自Server-DataSocket的数据并转交给TimeChannel。
 
     主动&被动操作: 只有A创建Client并与B的Server连接才能与B主动发起操作，B亦然。
@@ -34,12 +34,12 @@
 2. user(主要用于安全范围内的文件操作)：10
 3. admin(使用shell远程控制主机等全部权限)：20
 
-**客户端发送至服务端指令套接字：
+**客户端发送至服务端命令套接字：
 
-指令以 随机8字节的Mark 开头，并且连接字典来传递参数。
-在后续的异步发送文件中，每一条指令的发送会自动加上 8个字节的mark 标识。
+命令以 随机8字节的Mark 开头，并且连接字典来传递参数。
+在后续的异步发送文件中，每一条命令的发送会自动加上 8个字节的mark 标识。
 
-    更改指令格式为：
+    更改命令格式为：
     [8bytesMark]{
                     "command": "data"/"comm", # 命令类型(数据类型/命令类型)
                     "type": "file",         # 操作类型(具体操作方式)
@@ -51,7 +51,7 @@
                     }
                 }
 
-### 服务端答复至客户端指令套接字：
+### 服务端答复至客户端命令套接字：
 
 更改使用TimeChannel实现数据的总体接收与解密。
 每一个Client与Server连接后隔离建立TimeChannel。

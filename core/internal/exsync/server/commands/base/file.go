@@ -7,10 +7,7 @@ import (
 	"EXSync/core/internal/modules/sqlt"
 	loger "EXSync/core/log"
 	"EXSync/core/option/exsync/comm"
-	"EXSync/core/option/exsync/index"
-	"encoding/json"
 	"fmt"
-	"gorm.io/gorm"
 	"io"
 	"net"
 	"os"
@@ -394,201 +391,194 @@ func (c *Base) GetFile(data map[string]any) {
 //	}
 //}
 
-// PostFile 客户端发送文件至服务端
-func (c *Base) PostFile(data map[string]any, replyMark string, db *gorm.DB) {
-	remoteSpaceName, ok := data["spacename"].(string)
-	if !ok {
-		return
-	}
-	localSpace, ok := config.UserData[remoteSpaceName]
-	if !ok {
-		return
-	}
-	remoteFileRelPath, ok := data["file_path"].(string)
-	if !ok {
-		return
-	}
-	remoteFileSize, ok := data["file_size"].(int64)
-	if !ok {
-		return
-	}
-	remoteFileHash, ok := data["file_hash"].(string)
-	if !ok {
-		return
-	}
-	mode, ok := data["mode"].(int)
-	if !ok {
-		return
-	}
-	fileMark, ok := data["filemark"].(string)
-	if !ok {
-		return
-	}
-
-	// 初始化接收数据队列
-	err := c.TimeChannel.CreateRecv(fileMark)
-	if err != nil {
-		return
-	}
-
-	var status = ""
-
-	fileAbsPath := filepath.Join(localSpace.Path, remoteFileRelPath)
-	if len(remoteFileHash) != 32 {
-		status = "File hash too long!"
-	}
-
-	// 获取db
-	//spaceDb, err := index.Index.GetIndex(filepath.Join(localSpace.Path, ".\\sync\\info\\files.db"))
-	//if err != nil {
-	//	loger.Log.Errorf("Host %s failed to open the index database for %s!", c.Ip, remoteSpace)
-	//}
-
-	var file index.Index
-	var command comm.Command
-	db.Where("Path = ?", remoteFileRelPath).First(&file)
-	//spaceIndex.First(&indexOption, "code = ?", "D42")
-
-	//if result.Error != nil {
-	//	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-	//		size = 0
-	//	} else {
-	//		loger.Log.Errorf("")
-	//	}
-	//}
-	if file.Path == "" {
-		command = comm.Command{
-			Command: "",
-			Type:    "",
-			Method:  "",
-			Data: map[string]any{
-				"file_size": 0,
-				"file_hash": "",
-				"file_date": 0,
-				"status":    status,
-			},
-		}
-	} else {
-		command = comm.Command{
-			Command: "",
-			Type:    "",
-			Method:  "",
-			Data: map[string]any{
-				"file_size": file.Size,
-				"file_hash": file.Hash,
-				"file_date": file.EditDate,
-				"status":    status,
-			},
-		}
-	}
-
-	// 创建会话
-	session, err := socket.NewSession(c.TimeChannel, c.DataSocket, nil, replyMark, c.AesGCM)
-	if err != nil {
-		return
-	}
-	defer session.Close()
-
-	_, err = session.SendCommand(command, false, true)
-	if err != nil {
-		return
-	}
-
-	dataBlock := int64(config.PacketSize - 8 - c.EncryptionLoss) // fileMark 8 + GCM-tag 16 + GCM-nonce 12
-	switch mode {
-	case 0:
-		// 如果不存在文件，则创建文件。否则不执行操作。
-		if file.Path == "" {
-			readData := remoteFileSize
-			f, err := os.OpenFile(fileAbsPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-			if err != nil {
-				loger.Log.Errorf("PostFile: Error opening or creating file:%s", err)
-				return
-			}
-			defer f.Close()
-			for readData > 0 {
-				readData -= dataBlock
-				result, err := c.TimeChannel.Get(fileMark)
-				if err != nil {
-
-					return
-				}
-				_, err = f.Write(result)
-				if err != nil {
-					return
-				}
-			}
-			return
-		} else {
-			return
-		}
-	case 1:
-		// 如果不存在文件，则创建文件。否则重写文件。
-		if file.Path != "" {
-			err = os.Remove(fileAbsPath)
-			if err != nil {
-				// 数据不同步导致问题
-				loger.Log.Debugf("Error removing file:%s", err)
-				return
-			}
-		}
-
-		f, err := os.OpenFile(fileAbsPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-		if err != nil {
-			return
-		}
-		defer f.Close()
-
-		readData := remoteFileSize
-		for readData > 0 {
-			readData -= dataBlock
-			result, err := c.TimeChannel.Get(fileMark)
-			if err != nil {
-				return
-			}
-			_, err = f.Write(result)
-			if err != nil {
-				return
-			}
-		}
-	case 2:
-		// 如果存在文件，并且准备发送的文件字节是对方文件字节的超集(xxh3_128相同)，则续写文件。
-		if file.Path == "" {
-			return
-		}
-		// 是否要进行续传
-		reply, err := c.TimeChannel.GetTimeout(replyMark, int(remoteFileSize/1048576))
-		if err != nil {
-			return
-		}
-
-		var replyCommand comm.Command
-		err = json.Unmarshal(reply, &replyCommand)
-		if err != nil {
-			return
-		}
-
-		fileStatus := replyCommand.Data["status"].(bool)
-		if fileStatus {
-			f, err := os.OpenFile(fileAbsPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-			if err != nil {
-				return
-			}
-
-			difference := remoteFileSize - file.Size
-			var readData int64
-			for readData <= difference {
-				result, err := c.TimeChannel.Get(fileMark)
-				if err != nil {
-					return
-				}
-				_, err = f.Write(result)
-				if err != nil {
-					return
-				}
-				readData += dataBlock
-			}
-			return
-		}
-	}
-}
+//// PostFile 客户端发送文件至服务端
+//func (c *Base) PostFile(data map[string]any, replyMark string, db *gorm.DB) {
+//	remoteSpaceName, ok := data["spacename"].(string)
+//	if !ok {
+//		return
+//	}
+//	localSpace, ok := config.UserData[remoteSpaceName]
+//	if !ok {
+//		return
+//	}
+//	remoteFileRelPath, ok := data["file_path"].(string)
+//	if !ok {
+//		return
+//	}
+//	remoteFileSize, ok := data["file_size"].(int64)
+//	if !ok {
+//		return
+//	}
+//	remoteFileHash, ok := data["file_hash"].(string)
+//	if !ok {
+//		return
+//	}
+//	mode, ok := data["mode"].(int)
+//	if !ok {
+//		return
+//	}
+//	fileMark, ok := data["filemark"].(string)
+//	if !ok {
+//		return
+//	}
+//
+//	// 初始化接收数据队列
+//	err := c.TimeChannel.CreateRecv(fileMark)
+//	if err != nil {
+//		return
+//	}
+//
+//	var status = ""
+//
+//	fileAbsPath := filepath.Join(localSpace.Path, remoteFileRelPath)
+//	if len(remoteFileHash) != 32 {
+//		status = "File hash too long!"
+//	}
+//
+//	// 获取db
+//	//spaceDb, err := index.Index.GetIndex(filepath.Join(localSpace.Path, ".\\sync\\info\\files.db"))
+//	//if err != nil {
+//	//	loger.Log.Errorf("Host %s failed to open the index database for %s!", c.Ip, remoteSpace)
+//	//}
+//
+//	var file index.Index
+//	var command comm.Command
+//	db.Where("Path = ?", remoteFileRelPath).First(&file)
+//	//spaceIndex.First(&indexOption, "code = ?", "D42")
+//
+//	//if result.Error != nil {
+//	//	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+//	//		size = 0
+//	//	} else {
+//	//		loger.Log.Errorf("")
+//	//	}
+//	//}
+//	if file.Path == "" {
+//		command = comm.Command{
+//			Data: map[string]any{
+//				"file_size": 0,
+//				"file_hash": "",
+//				"file_date": 0,
+//				"status":    status,
+//			},
+//		}
+//	} else {
+//		command = comm.Command{
+//			Data: map[string]any{
+//				"file_size": file.Size,
+//				"file_hash": file.Hash,
+//				"file_date": file.EditDate,
+//				"status":    status,
+//			},
+//		}
+//	}
+//
+//	// 创建会话
+//	session, err := socket.NewSession(c.TimeChannel, c.DataSocket, nil, replyMark, c.AesGCM)
+//	if err != nil {
+//		return
+//	}
+//	defer session.Close()
+//
+//	_, err = session.SendCommand(command, false, true)
+//	if err != nil {
+//		return
+//	}
+//
+//	dataBlock := int64(config.PacketSize - 8 - c.EncryptionLoss) // fileMark 8 + GCM-tag 16 + GCM-nonce 12
+//	switch mode {
+//	case 0:
+//		// 如果不存在文件，则创建文件。否则不执行操作。
+//		if file.Path == "" {
+//			readData := remoteFileSize
+//			f, err := os.OpenFile(fileAbsPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+//			if err != nil {
+//				loger.Log.Errorf("PostFile: Error opening or creating file:%s", err)
+//				return
+//			}
+//			defer f.Close()
+//			for readData > 0 {
+//				readData -= dataBlock
+//				result, err := c.TimeChannel.Get(fileMark)
+//				if err != nil {
+//					return
+//				}
+//				_, err = f.Write(result)
+//				if err != nil {
+//					return
+//				}
+//			}
+//			return
+//		} else {
+//			return
+//		}
+//	case 1:
+//		// 如果不存在文件，则创建文件。否则重写文件。
+//		if file.Path != "" {
+//			err = os.Remove(fileAbsPath)
+//			if err != nil {
+//				// 数据不同步导致问题
+//				loger.Log.Debugf("Error removing file:%s", err)
+//				return
+//			}
+//		}
+//
+//		f, err := os.OpenFile(fileAbsPath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+//		if err != nil {
+//			return
+//		}
+//		defer f.Close()
+//
+//		readData := remoteFileSize
+//		for readData > 0 {
+//			readData -= dataBlock
+//			result, err := c.TimeChannel.Get(fileMark)
+//			if err != nil {
+//				return
+//			}
+//			_, err = f.Write(result)
+//			if err != nil {
+//				return
+//			}
+//		}
+//	case 2:
+//		// 如果存在文件，并且准备发送的文件字节是对方文件字节的超集(xxh3_128相同)，则续写文件。
+//		if file.Path == "" {
+//			return
+//		}
+//		// 是否要进行续传
+//		reply, err := c.TimeChannel.GetTimeout(replyMark, int(remoteFileSize/1048576))
+//		if err != nil {
+//			return
+//		}
+//
+//		var replyCommand comm.Command
+//		err = json.Unmarshal(reply, &replyCommand)
+//		if err != nil {
+//			return
+//		}
+//
+//		fileStatus := replyCommand.Data["status"].(bool)
+//		if fileStatus {
+//			f, err := os.OpenFile(fileAbsPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+//			if err != nil {
+//				return
+//			}
+//
+//			difference := remoteFileSize - file.Size
+//			var readData int64
+//			for readData <= difference {
+//				result, err := c.TimeChannel.Get(fileMark)
+//				if err != nil {
+//					return
+//				}
+//				_, err = f.Write(result)
+//				if err != nil {
+//					return
+//				}
+//				readData += dataBlock
+//			}
+//			return
+//		}
+//	}
+//}

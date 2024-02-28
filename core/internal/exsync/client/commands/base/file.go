@@ -6,7 +6,6 @@ import (
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/pathext"
 	"EXSync/core/internal/modules/socket"
-	"EXSync/core/internal/modules/sqlt"
 	loger "EXSync/core/log"
 	configOption "EXSync/core/option/config"
 	"EXSync/core/option/exsync/comm"
@@ -44,26 +43,25 @@ func (b *Base) GetFile(inputFiles []clientComm.GetFile, space configOption.UdDic
 	// 准备文件信息
 	var files map[string]any
 	for _, inputFile := range inputFiles {
-		fileMark := hashext.GetRandomStr(8)
-		replyMark := hashext.GetRandomStr(8)
-		//db.Where("path = ?", relPath).First(&file)
-		file, err := sqlt.QueryFile(space.Db, inputFile.RelPath)
-		if err != nil {
-			loger.Log.Errorf("Active GetFile: Error querying information for file %s!", inputFile.RelPath)
-			failedFiles[inputFile.RelPath] = FileQueryErr
-		}
+		fileMark := hashext.GetRandomStr(6)
+		replyMark := hashext.GetRandomStr(6)
+		//file, err := sqlt.QueryFile(space.Db, inputFile.RelPath)
+		//if err != nil {
+		//	loger.Log.Errorf("Active GetFile: Error querying information for file %s!", inputFile.RelPath)
+		//	failedFiles[inputFile.RelPath] = FileQueryErr
+		//}
 		fileStat, err := os.Stat(filepath.Join(space.Path, inputFile.RelPath))
 		if err == nil {
 			fs := fileStat.Size()
-			if fs != 0 && fs != file.Size {
+			if fs != inputFile.Size {
 				// 索引与本地文件实际情况不同步
 				failedFiles[inputFile.RelPath] = FileSyncDBErr
 			}
 		}
 
 		files[inputFile.RelPath] = map[string]any{
-			"hash":      file.Hash,
-			"size":      file.Size,
+			"hash":      inputFile.Hash,
+			"size":      inputFile.Size,
 			"replyMark": replyMark,
 			"fileMark":  fileMark,
 		}
@@ -84,13 +82,15 @@ func (b *Base) GetFile(inputFiles []clientComm.GetFile, space configOption.UdDic
 			"spaceName": space.SpaceName,
 		},
 	}
-	session, err := socket.NewSession(b.TimeChannel, nil, b.CommandSocket, hashext.GetRandomStr(8), b.AesGCM)
+	session, err := socket.NewSession(b.TimeChannel, nil, b.CommandSocket, hashext.GetRandomStr(6), b.AesGCM)
 	if err != nil {
+		loger.Log.Errorf("Active-GetFile-subRoutine: Create session failed! %s", err)
 		return nil, err
 	}
 	defer session.Close()
 	_, err = session.SendCommand(command, false, true)
 	if err != nil {
+
 		return nil, err
 	}
 
@@ -100,9 +100,7 @@ func (b *Base) GetFile(inputFiles []clientComm.GetFile, space configOption.UdDic
 	// 单文件传输线程
 	subRoutine := func(inputFile clientComm.GetFile, fileInfo map[string]any, wait *sync.WaitGroup, failFilesChan chan map[string]error) {
 		defer wait.Done()
-
 		outPath := inputFile.OutPath
-
 		localFileHash, ok := fileInfo["hash"].(string)
 		if !ok {
 			return
