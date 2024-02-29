@@ -78,13 +78,12 @@ func (b *Base) GetIndex(space configOption.UdDict) (*IndexFile, error) {
 		pathext.MakeDir(savePath)
 		remoteIndexFilePath := filepath.Join(savePath, "sync.db")
 
-		fileSlice := []clientComm.GetFile{
-			{
-				RelPath: filepath.Join(config.SpaceInfoPath, "sync.db"),
-				OutPath: remoteIndexFilePath,
-			},
-		}
-		_, err = b.GetFile(fileSlice, space)
+		getFile := []clientComm.GetFile{{
+			RelPath: filepath.Join(config.SpaceInfoPath, "sync.db"),
+			OutPath: remoteIndexFilePath,
+			Space:   &space,
+		}}
+		_, err = b.GetFile(getFile)
 		if err == nil {
 			index := IndexFile{path: remoteIndexFilePath}
 			loger.Log.Debugf("Active-GetIndex: Successfully obtained the index of SyncSpace %s from host %s", space.SpaceName, b.Ip)

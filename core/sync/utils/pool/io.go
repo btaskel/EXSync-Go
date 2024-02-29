@@ -6,7 +6,8 @@ import (
 )
 
 type StressManage struct {
-	threads int
+	threads  int // 每个主机最大并发数
+	queueNum int // 每个主机最大等待队列 default: 64
 }
 
 type file struct {
@@ -46,50 +47,6 @@ func NewFilePool(ActiveConnectManage map[string]serverOption.ActiveConnectManage
 	go pool.checkTask()
 
 	return pool
-}
-
-func (p *Pool) checkTask() {
-	for {
-		select {
-		case fileTask := <-p.waitQueue:
-			// 更新hostStress
-			for hostName := range p.activeConnectManage {
-				if _, ok := p.hostStress[hostName]; ok {
-					continue
-				} else {
-					go p.initHost(hostName)
-				}
-			}
-
-			// 获取当前压力最小的主机
-			minV := int64(^uint64(0) >> 1)
-			host := ""
-			for k, v := range p.hostStress {
-				if v.total < minV {
-					minV = v.total
-					host = k
-				}
-			}
-
-			//添加任务
-			p.hostStress[host].tasks <- fileTask
-			p.hostStress[host].total += fileTask.TotalSize
-		}
-	}
-}
-
-func (p *Pool) initHost(hostName string) {
-	p.hostStress[hostName] = &struct {
-		tasks chan file
-		total int64
-	}{tasks: make(chan file), total: 0}
-
-	for {
-		select {
-		case t := <-p.hostStress[hostName].tasks:
-			// todo: getBlock 未完待续——（bushi
-		}
-	}
 }
 
 // Add 增加任务

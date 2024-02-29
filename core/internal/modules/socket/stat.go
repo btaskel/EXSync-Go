@@ -9,9 +9,6 @@ import (
 // 无论执行结果如何, 该函数均不会抛出错误, 但是上层必须在该函数执行后立即返回
 func SendStat(s *Session, stat string) {
 	command := comm.Command{
-		Command: "",
-		Type:    "",
-		Method:  "",
 		Data: map[string]any{
 			"stat": stat,
 		},

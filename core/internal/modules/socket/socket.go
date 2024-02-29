@@ -81,7 +81,7 @@ func (s *Session) SendCommand(data comm.Command, output, encrypt bool) (result m
 	if err != nil {
 		return nil, err
 	}
-	if encrypt {
+	if encrypt && s.aesGCM != nil {
 		if len(commandJson) > 4060 {
 			panic("sendNoTimeDict: 命令发送时大于4060个字节")
 		} else if len(commandJson) < 36 {
@@ -96,7 +96,7 @@ func (s *Session) SendCommand(data comm.Command, output, encrypt bool) (result m
 	}
 	length := len(commandJson) + 6
 	var preparedData []byte
-	if s.aesGCM != nil {
+	if encrypt && s.aesGCM != nil {
 		// 追加
 		length += 28
 		b := make([]byte, 2)

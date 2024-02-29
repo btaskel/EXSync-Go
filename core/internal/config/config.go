@@ -3,6 +3,7 @@ package config
 import (
 	"EXSync/core/internal/modules/hashext"
 	"EXSync/core/internal/modules/pathext"
+	"EXSync/core/internal/modules/sqlt"
 	loger "EXSync/core/log"
 	"EXSync/core/option/config"
 	"database/sql"
@@ -36,7 +37,6 @@ func newUserData(config *configOption.ConfigStruct) map[string]configOption.UdDi
 	userDataDict := make(map[string]configOption.UdDict)
 	for _, userdata := range config.Userdata {
 		savePath := path.Join(userdata.Path, SpaceInfoPath)
-		var db *sql.DB
 		// 如果同步空间不存在db存储文件夹则创建文件夹
 		if _, err := os.Stat(savePath); os.IsNotExist(err) {
 			err = os.MkdirAll(savePath, 0755)
@@ -47,42 +47,16 @@ func newUserData(config *configOption.ConfigStruct) map[string]configOption.UdDi
 		}
 
 		// 打开数据库，存储数据库对象
-		db, err := sql.Open("sqlite", path.Join(savePath, "sync.db"))
+		db, err := sql.Open("sqlite", filepath.Join(savePath, "sync.db"))
 		if err != nil {
 			loger.Log.Fatalf("newUserData: Failed to open database %s! %s", userdata.Spacename, err)
 			os.Exit(1)
 		}
 
-		// 创建表
-		row := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name=?", "sync")
-		var name string
-		switch err = row.Scan(&name); err {
-		case sql.ErrNoRows:
-			// 表不存在
-			createTable := `CREATE TABLE IF NOT EXISTS sync (
-			    id INTEGER PRIMARY KEY,
-			    path TEXT,
-			    size INTEGER,
-				hash TEXT,
-				hashBlock TEXT,
-				sysDate INTEGER,
-				editDate INTEGER,
-				createDate INTEGER
-			)`
-			statement, err := db.Prepare(createTable)
-			if err != nil {
-				loger.Log.Fatalf("newUserData: Failed to create file index table for synchronization space %s! %s", userdata.Spacename, err)
-				os.Exit(1)
-			}
-			_, err = statement.Exec()
-			if err != nil {
-				loger.Log.Fatalf("newUserData: Failed to create file index table for synchronization space %s! %s", userdata.Spacename, err)
-				os.Exit(1)
-			}
-		case nil:
-			// 表存在
-		default:
-			loger.Log.Fatal(err)
+		err = sqlt.CreateSyncTable(db)
+		if err != nil {
+			loger.Log.Fatalf("%s %s!", err, userdata.Spacename)
+			return nil
 		}
 
 		userDataDict[userdata.Spacename] = configOption.UdDict{

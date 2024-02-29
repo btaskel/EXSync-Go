@@ -13,23 +13,80 @@
 
 package pool
 
-//type HostQueue struct {
-//	Queue map[Host]clientComm.GetFile
-//}
-//
-//type Pool struct {
-//	queue   chan map[Host]clientComm.GetFile
-//	dynamic chan []clientComm.GetFile
-//	clients chan []*client.Client
-//}
-//
+import (
+	clientComm "EXSync/core/option/exsync/comm/client"
+	"time"
+)
 
-//
-//func parseIndex(*base.IndexFile) {
-//
-//}
+func (p *Pool) checkTask() {
+	for {
+		select {
+		case fileTask := <-p.waitQueue:
+			// 更新hostStress
+			for hostName := range p.activeConnectManage {
+				if _, ok := p.hostStress[hostName]; ok {
+					continue
+				} else {
+					go p.addHost(hostName)
+				}
+			}
 
-//// Add 向池里添加新同步空间队列
-//func (p *Pool) Add(fileQueue *HostQueue) error {
-//
-//}
+			// 获取当前压力最小的主机
+			minV := int64(^uint64(0) >> 1)
+			host := ""
+			for k, v := range p.hostStress {
+				if v.total < minV {
+					minV = v.total
+					host = k
+				}
+			}
+
+			//添加任务
+			p.hostStress[host].tasks <- fileTask
+			p.hostStress[host].total += fileTask.TotalSize
+		}
+	}
+}
+
+func (p *Pool) addHost(hostName string) {
+	p.hostStress[hostName] = &struct {
+		tasks chan file
+		total int64
+	}{tasks: make(chan file, p.queueNum), total: 0}
+
+	client := p.activeConnectManage[hostName].Client
+
+	executeFunc := func(getFiles []clientComm.GetFile) {
+		failedFiles, err := client.Comm.GetFile(getFiles)
+	}
+
+	// 任务处理: 每次从队列取十个任务, 如果超时则将现有的任务直接转交
+	count := 0
+	var getFiles []clientComm.GetFile
+	for {
+		select {
+		case t, ok := <-p.hostStress[hostName].tasks:
+			if ok {
+				getFiles = append(getFiles, clientComm.GetFile{
+					RelPath: t.RelPath,
+					OutPath: t.OutPath,
+					Size:    t.FileSize,
+					Date:    t.FileDate,
+					Hash:    t.FileHash,
+				})
+				count += 1
+				if count == 10 {
+					executeFunc(getFiles)
+					count = 0
+					getFiles = getFiles[:0]
+
+				}
+				continue
+			}
+		case <-time.After(time.Second * 4):
+			executeFunc(getFiles)
+			count = 0
+			getFiles = getFiles[:0]
+		}
+	}
+}

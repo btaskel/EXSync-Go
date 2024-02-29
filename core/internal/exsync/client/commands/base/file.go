@@ -7,7 +7,6 @@ import (
 	"EXSync/core/internal/modules/pathext"
 	"EXSync/core/internal/modules/socket"
 	loger "EXSync/core/log"
-	configOption "EXSync/core/option/config"
 	"EXSync/core/option/exsync/comm"
 	clientComm "EXSync/core/option/exsync/comm/client"
 	"errors"
@@ -32,9 +31,9 @@ var (
 
 // GetFile 根据相对路径列表在Space里搜索相应的文件，并获取到本机。
 // relPaths的数量将决定以多少并发获取文件
-// 如果本地文件是待续写文件，将会续写
-// 如果本地文件不存在，将会创建
-func (b *Base) GetFile(inputFiles []clientComm.GetFile, space configOption.UdDict) (failedFiles map[string]error, err error) {
+// offset = 0 :本地文件是待续写文件，将会续写；如果本地文件不存在，将会创建
+// offset ≠ 0 :直接根据偏移量获取指定的大小
+func (b *Base) GetFile(inputFiles []clientComm.GetFile) (failedFiles map[string]error, err error) {
 	// 权限验证
 	if !CheckPermission(b.VerifyManage, []string{comm.PermRead}) {
 		return nil, errors.New("MissingPermissions")
@@ -43,15 +42,7 @@ func (b *Base) GetFile(inputFiles []clientComm.GetFile, space configOption.UdDic
 	// 准备文件信息
 	var files map[string]any
 	for _, inputFile := range inputFiles {
-		fileMark := hashext.GetRandomStr(6)
-		replyMark := hashext.GetRandomStr(6)
-		//file, err := sqlt.QueryFile(space.Db, inputFile.RelPath)
-		//if err != nil {
-		//	loger.Log.Errorf("Active GetFile: Error querying information for file %s!", inputFile.RelPath)
-		//	failedFiles[inputFile.RelPath] = FileQueryErr
-		//}
-		fileStat, err := os.Stat(filepath.Join(space.Path, inputFile.RelPath))
-		if err == nil {
+		if fileStat, err := os.Stat(filepath.Join(inputFile.Space.Path, inputFile.RelPath)); err == nil {
 			fs := fileStat.Size()
 			if fs != inputFile.Size {
 				// 索引与本地文件实际情况不同步
@@ -62,8 +53,10 @@ func (b *Base) GetFile(inputFiles []clientComm.GetFile, space configOption.UdDic
 		files[inputFile.RelPath] = map[string]any{
 			"hash":      inputFile.Hash,
 			"size":      inputFile.Size,
-			"replyMark": replyMark,
-			"fileMark":  fileMark,
+			"replyMark": hashext.GetRandomStr(6),
+			"fileMark":  hashext.GetRandomStr(6),
+			"spaceName": inputFile.Space.SpaceName,
+			"offset":    inputFile.Offset,
 		}
 	}
 
@@ -78,8 +71,7 @@ func (b *Base) GetFile(inputFiles []clientComm.GetFile, space configOption.UdDic
 		Type:    "file",
 		Method:  "get",
 		Data: map[string]any{
-			"files":     files,
-			"spaceName": space.SpaceName,
+			"files": files,
 		},
 	}
 	session, err := socket.NewSession(b.TimeChannel, nil, b.CommandSocket, hashext.GetRandomStr(6), b.AesGCM)
@@ -90,193 +82,23 @@ func (b *Base) GetFile(inputFiles []clientComm.GetFile, space configOption.UdDic
 	defer session.Close()
 	_, err = session.SendCommand(command, false, true)
 	if err != nil {
-
 		return nil, err
 	}
-
-	// 初始化传输
-	dataBlock := int64(config.PacketSize - 8 - b.EncryptionLoss)
 
 	// 单文件传输线程
 	subRoutine := func(inputFile clientComm.GetFile, fileInfo map[string]any, wait *sync.WaitGroup, failFilesChan chan map[string]error) {
 		defer wait.Done()
-		outPath := inputFile.OutPath
-		localFileHash, ok := fileInfo["hash"].(string)
-		if !ok {
-			return
-		}
-		localFileSize, ok := fileInfo["size"].(int64)
-		if !ok {
-			return
-		}
-		fileMark, ok := fileInfo["fileMark"].(string)
-		if !ok {
-			return
-		}
-		replyMark, ok := fileInfo["replyMark"].(string)
-		if !ok {
-			return
+
+		if inputFile.Offset != 0 {
+			b.gfDirect(fileInfo, inputFile, failFilesChan)
+		} else {
+			b.gfCheck(fileInfo, inputFile, failFilesChan)
 		}
 
-		// 设置输出路径
-		filePath := filepath.Join(space.Path, outPath)
-
-		// 创建会话接收首次答复
-		s, err := socket.NewSession(b.TimeChannel, b.DataSocket, nil, replyMark, b.AesGCM)
-		defer s.Close()
-		if err != nil {
-			failFilesChan <- map[string]error{
-				outPath: SocketNewSessionErr,
-			}
-			return
-		}
-
-		reply, err := s.Recv()
-		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-				failFilesChan <- map[string]error{
-					outPath: SocketNewSessionErr,
-				}
-				return
-			}
-			failFilesChan <- map[string]error{
-				outPath: err,
-			}
-			return
-		}
-
-		// 处理远程文件状态
-		remoteFileDate, ok := reply.Data["date"].(int64)
-		if !ok {
-			socket.SendStat(s, "Active-GetFile-subRoutine: Missing parameter <date>!")
-			return
-		}
-		remoteFileSize, ok := reply.Data["size"].(int64)
-		if !ok {
-			socket.SendStat(s, "Active-GetFile-subRoutine: Missing parameter <size>!")
-			return
-		}
-		remoteFileHash, ok := reply.Data["hash"].(string)
-		if !ok {
-			socket.SendStat(s, "Active-GetFile-subRoutine: Missing parameter <hash>!")
-			return
-		}
-
-		if remoteFileSize == 0 {
-			loger.Log.Errorf("Active-GetFile-subRoutine: File %s failed to retrieve from host %s", filePath, b.Ip)
-			return
-		}
-		// 初始化文件写入缓冲区
-		fileBuf := buffer.File{
-			TimeChannel: b.TimeChannel,
-			FileMark:    fileMark,
-			DataBlock:   dataBlock,
-		}
-		if remoteFileHash == localFileHash {
-			// 正在尝试获取一个同样的文件，没有意义。
-		}
-		if remoteFileSize > localFileSize && localFileSize != 0 {
-			// 1.远程文件大于本地文件，等待对方判断是否为需续写文件；
-			// 2.本地文件不存在，需要对方发送文件；
-
-			reply, ok = s.RecvTimeout(int(remoteFileSize/1048576) + 3)
-			if !ok {
-				loger.Log.Errorf("Active-GetFile-subRoutine: Received file renewal %s reply timeout!", outPath)
-				failFilesChan <- map[string]error{
-					outPath: SocketTimeoutErr,
-				}
-				return
-			}
-			pass, ok := reply.Data["ok"].(bool)
-			if !ok || !pass {
-				failFilesChan <- map[string]error{
-					outPath: ParamsNotExistsErr,
-				}
-				return
-			}
-
-			pathext.MakeDir(filepath.Dir(filePath))
-			f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0667)
-			if err != nil {
-				failFilesChan <- map[string]error{
-					outPath: FileOpenErr,
-				}
-				return
-			}
-			defer func(f *os.File) {
-				err = f.Close()
-				if err != nil {
-					loger.Log.Error(err)
-					failFilesChan <- map[string]error{
-						outPath: FileCloseErr,
-					}
-					return
-				}
-			}(f)
-			// 创建文件缓冲区(1MB)
-			err = fileBuf.FileWrite(f, localFileSize, remoteFileSize, outPath, remoteFileDate, b.VerifyManage)
-			if err == errors.New("timeout") {
-				loger.Log.Errorf("Active-GetFile-subRoutine: Sync Space %s :Receiving %s file timeout!", space.SpaceName, filePath)
-			} else {
-				loger.Log.Errorf("Active-GetFile-subRoutine: Sync Space %s :Unknown error receiving %s file from host %s! %s", space.SpaceName, filePath, b.Ip, err)
-			}
-			return
-
-		} else if remoteFileSize > localFileSize && localFileSize == 0 {
-			// 本地文件不存在
-			pathext.MakeDir(filepath.Dir(filePath))
-			f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0667)
-			if err != nil {
-				failFilesChan <- map[string]error{
-					outPath: FileOpenErr,
-				}
-				return
-			}
-			defer func(f *os.File) {
-				err := f.Close()
-				if err != nil {
-					loger.Log.Error(err)
-					failFilesChan <- map[string]error{
-						outPath: FileCloseErr,
-					}
-					return
-				}
-			}(f)
-
-			// 创建文件缓冲区(1MB)
-			err = fileBuf.FileWrite(f, localFileSize, remoteFileSize, outPath, remoteFileDate, b.VerifyManage)
-			if err == errors.New("timeout") {
-				loger.Log.Errorf("Active-GetFile-subRoutine: Sync Space %s :Receiving %s file timeout! %s", space.SpaceName, filePath, err)
-				failFilesChan <- map[string]error{
-					outPath: SocketTimeoutErr,
-				}
-				return
-			} else {
-				loger.Log.Errorf("Active-GetFile-subRoutine: Sync Space %s :Unknown error receiving %s file from host %s! %s", space.SpaceName, filePath, b.Ip, err)
-				failFilesChan <- map[string]error{
-					outPath: SocketBufferErr,
-				}
-			}
-
-		} else if remoteFileSize == localFileSize {
-			// 1.文件大小相同，哈希值不同；
-			// 2.本地或远程文件不存在；
-			if remoteFileSize == 0 {
-				// 远程文件不存在
-				return
-			} else {
-				// 文件不同
-				return
-			}
-
-		} else if remoteFileSize < localFileSize {
-			// 1.远程文件小于本地文件，不进行同步
-			// 2.在获取一个远程不存在的文件
-		}
 	}
 
 	// 开始传输
-	loger.Log.Debugf("Active-GetFile: Sync Space %s :File %s begins to transfer", space.SpaceName, inputFiles)
+	//loger.Log.Debugf("Active-GetFile: File %s begins to transfer", inputFiles)
 	var wait sync.WaitGroup
 	fileCount := len(inputFiles)
 	failFileChannel := make(chan map[string]error, fileCount)
@@ -285,10 +107,251 @@ func (b *Base) GetFile(inputFiles []clientComm.GetFile, space configOption.UdDic
 		go subRoutine(inputFile, files, &wait, failFileChannel)
 	}
 	wait.Wait()
-	loger.Log.Debugf("Active-GetFile: Sync Space %s :File %s transfer completed", space.SpaceName, inputFiles)
+	//loger.Log.Debugf("Active-GetFile: File %s transfer completed", inputFiles)
 	return
 }
 
-func (b *Base) PostFile() {
+// gfDirect 根据偏移量进行传输
+func (b *Base) gfDirect(fileInfo map[string]any, inputFile clientComm.GetFile, failFilesChan chan map[string]error) {
+	// 初始化传输大小
+	dataBlock := int64(config.PacketSize - 8 - b.EncryptionLoss)
+	fileMark, ok := fileInfo["fileMark"].(string)
+	if !ok {
+		loger.Log.Errorf("")
+		return
+	}
+	replyMark, ok := fileInfo["replyMark"].(string)
+	if !ok {
+		return
+	}
 
+	s, err := socket.NewSession(b.TimeChannel, b.DataSocket, nil, replyMark, b.AesGCM)
+	defer s.Close()
+	if err != nil {
+		failFilesChan <- map[string]error{
+			inputFile.OutPath: SocketNewSessionErr,
+		}
+		return
+	}
+
+	// 文件输出路径
+	outputPath := filepath.Join(inputFile.Space.Path, inputFile.OutPath)
+
+	// 创建文件
+	f, err := os.OpenFile(outputPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0667)
+	if err != nil {
+		failFilesChan <- map[string]error{
+			inputFile.OutPath: FileOpenErr,
+		}
+		return
+	}
+	defer func(f *os.File) {
+		err = f.Close()
+		if err != nil {
+			loger.Log.Error(err)
+			failFilesChan <- map[string]error{
+				outputPath: FileCloseErr,
+			}
+			return
+		}
+	}(f)
+
+	// 接收文件
+	fileBuf := buffer.File{
+		TimeChannel: b.TimeChannel,
+		FileMark:    fileMark,
+		DataBlock:   dataBlock,
+	}
+	err = fileBuf.FileWrite(f, inputFile.Size, inputFile.Offset, outputPath, inputFile.Date, b.VerifyManage)
+	if err != nil {
+		if err == errors.New("timeout") {
+			loger.Log.Errorf("Active-GetFile-subRoutine: Sync Space %s :Receiving %s file timeout!", inputFile.Space.SpaceName, outputPath)
+		} else {
+			loger.Log.Errorf("Active-GetFile-subRoutine: Sync Space %s :Unknown error receiving %s file from host %s! %s", inputFile.Space.SpaceName, outputPath, b.Ip, err)
+		}
+		return
+	}
+
+}
+
+// gfCheck 检查并判断文件状态进行传输
+func (b *Base) gfCheck(fileInfo map[string]any, inputFile clientComm.GetFile, failFilesChan chan map[string]error) {
+	// 初始化传输大小
+	dataBlock := int64(config.PacketSize - 8 - b.EncryptionLoss)
+
+	//outPath :=
+
+	fileMark, ok := fileInfo["fileMark"].(string)
+	if !ok {
+		return
+	}
+	replyMark, ok := fileInfo["replyMark"].(string)
+	if !ok {
+		return
+	}
+
+	localFileHash, ok := fileInfo["hash"].(string)
+	if !ok {
+		return
+	}
+	localFileSize, ok := fileInfo["size"].(int64)
+	if !ok {
+		return
+	}
+
+	// 设置输出路径
+	outputPath := filepath.Join(inputFile.Space.Path, inputFile.OutPath)
+
+	// 创建会话接收首次答复
+	s, err := socket.NewSession(b.TimeChannel, b.DataSocket, nil, replyMark, b.AesGCM)
+	defer s.Close()
+	if err != nil {
+		failFilesChan <- map[string]error{
+			inputFile.OutPath: SocketNewSessionErr,
+		}
+		return
+	}
+
+	reply, err := s.Recv()
+	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			failFilesChan <- map[string]error{
+				inputFile.OutPath: SocketNewSessionErr,
+			}
+			return
+		}
+		failFilesChan <- map[string]error{
+			inputFile.OutPath: err,
+		}
+		return
+	}
+
+	// 处理远程文件状态
+	remoteFileDate, ok := reply.Data["date"].(int64)
+	if !ok {
+		socket.SendStat(s, "Active-GetFile-subRoutine: Missing parameter <date>!")
+		return
+	}
+	remoteFileSize, ok := reply.Data["size"].(int64)
+	if !ok {
+		socket.SendStat(s, "Active-GetFile-subRoutine: Missing parameter <size>!")
+		return
+	}
+	remoteFileHash, ok := reply.Data["hash"].(string)
+	if !ok {
+		socket.SendStat(s, "Active-GetFile-subRoutine: Missing parameter <hash>!")
+		return
+	}
+
+	if remoteFileSize == 0 {
+		loger.Log.Errorf("Active-GetFile-subRoutine: File %s failed to retrieve from host %s", outputPath, b.Ip)
+		return
+	}
+	// 初始化文件写入缓冲区
+	fileBuf := buffer.File{
+		TimeChannel: b.TimeChannel,
+		FileMark:    fileMark,
+		DataBlock:   dataBlock,
+	}
+	if remoteFileHash == localFileHash {
+		// 正在尝试获取一个同样的文件，没有意义。
+	}
+	if remoteFileSize > localFileSize && localFileSize != 0 {
+		// 1.远程文件大于本地文件，等待对方判断是否为需续写文件；
+		// 2.本地文件不存在，需要对方发送文件；
+
+		reply, ok = s.RecvTimeout(int(remoteFileSize/1048576) + 3)
+		if !ok {
+			loger.Log.Errorf("Active-GetFile-subRoutine: Received file renewal %s reply timeout!", inputFile.OutPath)
+			failFilesChan <- map[string]error{
+				inputFile.OutPath: SocketTimeoutErr,
+			}
+			return
+		}
+		pass, ok := reply.Data["ok"].(bool)
+		if !ok || !pass {
+			failFilesChan <- map[string]error{
+				inputFile.OutPath: ParamsNotExistsErr,
+			}
+			return
+		}
+
+		pathext.MakeDir(filepath.Dir(outputPath))
+		f, err := os.OpenFile(outputPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0667)
+		if err != nil {
+			failFilesChan <- map[string]error{
+				inputFile.OutPath: FileOpenErr,
+			}
+			return
+		}
+		defer func(f *os.File) {
+			err = f.Close()
+			if err != nil {
+				loger.Log.Error(err)
+				failFilesChan <- map[string]error{
+					inputFile.OutPath: FileCloseErr,
+				}
+				return
+			}
+		}(f)
+		// 创建文件缓冲区(1MB)
+		err = fileBuf.FileWrite(f, localFileSize, remoteFileSize, outputPath, remoteFileDate, b.VerifyManage)
+		if err == errors.New("timeout") {
+			loger.Log.Errorf("Active-GetFile-subRoutine: Sync Space %s :Receiving %s file timeout!", inputFile.Space.SpaceName, outputPath)
+		} else {
+			loger.Log.Errorf("Active-GetFile-subRoutine: Sync Space %s :Unknown error receiving %s file from host %s! %s", inputFile.Space.SpaceName, outputPath, b.Ip, err)
+		}
+		return
+
+	} else if remoteFileSize > localFileSize && localFileSize == 0 {
+		// 本地文件不存在
+		pathext.MakeDir(filepath.Dir(outputPath))
+		f, err := os.OpenFile(outputPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0667)
+		if err != nil {
+			failFilesChan <- map[string]error{
+				inputFile.OutPath: FileOpenErr,
+			}
+			return
+		}
+		defer func(f *os.File) {
+			err := f.Close()
+			if err != nil {
+				loger.Log.Error(err)
+				failFilesChan <- map[string]error{
+					inputFile.OutPath: FileCloseErr,
+				}
+				return
+			}
+		}(f)
+
+		// 创建文件缓冲区(1MB)
+		err = fileBuf.FileWrite(f, localFileSize, remoteFileSize, inputFile.OutPath, remoteFileDate, b.VerifyManage)
+		if err == errors.New("timeout") {
+			loger.Log.Errorf("Active-GetFile-subRoutine: Sync Space %s :Receiving %s file timeout! %s", inputFile.Space.SpaceName, outputPath, err)
+			failFilesChan <- map[string]error{
+				inputFile.OutPath: SocketTimeoutErr,
+			}
+			return
+		} else {
+			loger.Log.Errorf("Active-GetFile-subRoutine: Sync Space %s :Unknown error receiving %s file from host %s! %s", inputFile.Space.SpaceName, outputPath, b.Ip, err)
+			failFilesChan <- map[string]error{
+				inputFile.OutPath: SocketBufferErr,
+			}
+		}
+
+	} else if remoteFileSize == localFileSize {
+		// 1.文件大小相同，哈希值不同；
+		// 2.本地或远程文件不存在；
+		if remoteFileSize == 0 {
+			// 远程文件不存在
+			return
+		} else {
+			// 文件不同
+			return
+		}
+
+	} else if remoteFileSize < localFileSize {
+		// 1.远程文件小于本地文件，不进行同步
+		// 2.在获取一个远程不存在的文件
+	}
 }

@@ -3,7 +3,8 @@ package sync
 import "EXSync/core/internal/exsync/server"
 
 type Sync struct {
-	Server *server.Server
+	Server    *server.Server
+	spaceLock map[string]struct{}
 }
 
 func (s *Sync) NewSync() {
