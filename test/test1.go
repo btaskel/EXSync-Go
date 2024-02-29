@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/binary"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -741,21 +741,30 @@ func main() {
 	//		}
 	//	}
 	//}
-	fmt.Println(^uint64(0) >> 1)
-	fmt.Println(255 * 3)
-	leng := []byte{15, 255} // 1111 1111 0111 1111
-	num := int32(binary.BigEndian.Uint16(leng))
-	fmt.Println(num)
+	//fmt.Println(^uint64(0) >> 1)
+	//fmt.Println(255 * 3)
+	//leng := []byte{15, 255} // 1111 1111 0111 1111
+	//num := int32(binary.BigEndian.Uint16(leng))
+	//fmt.Println(num)
+	////
+	//intToByte := 28
+	//b := make([]byte, 2)
+	//binary.BigEndian.PutUint16(b, uint16(intToByte))
+	//fmt.Println(b)
 	//
-	intToByte := 28
-	b := make([]byte, 2)
-	binary.BigEndian.PutUint16(b, uint16(intToByte))
-	fmt.Println(b)
-
-	fmt.Println(5 >> 2)
-
-	//str := "abcdefss"
-	//fmt.Println(str[:6])
+	//fmt.Println(5 >> 2)
+	//
+	////str := "abcdefss"
+	////fmt.Println(str[:6])
+	//timer := time.NewTicker(1 * time.Second)
+	//fmt.Println(timer)
+	ctx := context.Background()
+	fmt.Println(<-ctx.Done())
+	ctx2, ctx2Cancel := context.WithCancel(ctx)
+	ctx2Cancel()
+	fmt.Println(<-ctx2.Done())
+	ctx3 := context.WithValue(ctx2, "a", "b")
+	fmt.Println(<-ctx3.Done())
 }
 
 func minKey(m map[string]int) string {

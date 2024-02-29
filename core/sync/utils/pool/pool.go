@@ -14,27 +14,29 @@
 package pool
 
 import (
-	clientComm "EXSync/core/option/exsync/comm/client"
+	"EXSync/core/internal/exsync/client"
 	"time"
 )
 
+// 检查任务所需的主机, 并筛选出压力最小的主机与之进行传输
 func (p *Pool) checkTask() {
 	for {
 		select {
 		case fileTask := <-p.waitQueue:
-			// 更新hostStress
-			for hostName := range p.activeConnectManage {
-				if _, ok := p.hostStress[hostName]; ok {
-					continue
-				} else {
-					go p.addHost(hostName)
+			// 获取该任务准许的主机
+			var allowHost map[Host]HostStress
+			for _, taskHostName := range fileTask.Hosts {
+				for hostName, activeConnect := range p.hostStress {
+					if hostName == taskHostName {
+						allowHost[hostName] = activeConnect
+					}
 				}
 			}
 
 			// 获取当前压力最小的主机
 			minV := int64(^uint64(0) >> 1)
 			host := ""
-			for k, v := range p.hostStress {
+			for k, v := range allowHost {
 				if v.total < minV {
 					minV = v.total
 					host = k
@@ -48,45 +50,41 @@ func (p *Pool) checkTask() {
 	}
 }
 
-func (p *Pool) addHost(hostName string) {
-	p.hostStress[hostName] = &struct {
-		tasks chan file
-		total int64
-	}{tasks: make(chan file, p.queueNum), total: 0}
+// addHost 增加主机, 并使该主机从文件同步池中持续接收任务
+func (p *Pool) addHost(hostAddr string) {
+	c := p.activeConnectManage[hostAddr].Client
 
-	client := p.activeConnectManage[hostName].Client
+	p.hostStress[hostAddr] = &struct {
+		tasks  chan file
+		total  int64
+		client *client.Client
+	}{tasks: make(chan file, p.queueNum), total: 0, client: c}
 
-	executeFunc := func(getFiles []clientComm.GetFile) {
-		failedFiles, err := client.Comm.GetFile(getFiles)
-	}
-
-	// 任务处理: 每次从队列取十个任务, 如果超时则将现有的任务直接转交
-	count := 0
-	var getFiles []clientComm.GetFile
+	// 任务处理: 每次从队列取十个任务, 如果超时则将现有的任务直接提交
+	var files map[string]file
 	for {
 		select {
-		case t, ok := <-p.hostStress[hostName].tasks:
-			if ok {
-				getFiles = append(getFiles, clientComm.GetFile{
-					RelPath: t.RelPath,
-					OutPath: t.OutPath,
-					Size:    t.FileSize,
-					Date:    t.FileDate,
-					Hash:    t.FileHash,
-				})
-				count += 1
-				if count == 10 {
-					executeFunc(getFiles)
-					count = 0
-					getFiles = getFiles[:0]
+		case t, ok := <-p.hostStress[hostAddr].tasks:
+			if !ok {
+				return
+			}
 
-				}
+			files[t.RelPath] = t
+			if len(files) == 10 {
+				p.executeFunc(c, files, p.hostStress[hostAddr], hostAddr)
+				//getFiles = getFiles[:0]
+				files = make(map[string]file)
+			}
+
+		case <-time.After(time.Second * 4):
+			if len(files) == 0 {
 				continue
 			}
-		case <-time.After(time.Second * 4):
-			executeFunc(getFiles)
-			count = 0
-			getFiles = getFiles[:0]
+			p.executeFunc(c, files, p.hostStress[hostAddr], hostAddr)
+			files = make(map[string]file)
+
+		case <-p.ctx.Done():
+			return
 		}
 	}
 }
