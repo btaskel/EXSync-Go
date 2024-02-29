@@ -23,6 +23,6 @@ func GetActiveConnect(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func GetPassiveConnect() {
+func GetPassiveConnect(w http.ResponseWriter, r *http.Request) {
 
 }
