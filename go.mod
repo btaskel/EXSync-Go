@@ -9,7 +9,6 @@ require (
 	github.com/quic-go/quic-go v0.41.0
 	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/net v0.21.0
-	gorm.io/gorm v1.25.7
 )
 
 require (
@@ -17,8 +16,6 @@ require (
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/google/pprof v0.0.0-20221118152302-e6195bd50e26 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/onsi/ginkgo/v2 v2.9.5 // indirect

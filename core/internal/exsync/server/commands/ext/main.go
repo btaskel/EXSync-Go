@@ -2,11 +2,7 @@ package ext
 
 import (
 	"EXSync/core/internal/exsync/server/commands/base"
-	"EXSync/core/internal/modules/encryption"
-	"EXSync/core/internal/modules/timechannel"
 	"EXSync/core/option/exsync/comm"
-	serverOption "EXSync/core/option/exsync/server"
-	"net"
 )
 
 type CommandSet struct {
@@ -14,26 +10,8 @@ type CommandSet struct {
 }
 
 // NewCommandSet 创建扩展指令集对象
-func NewCommandSet(timeChannel *timechannel.TimeChannel, dataSocket, commandSocket net.Conn, AesGCM *encryption.Gcm,
-	EncryptionLoss int, verifyManage map[string]serverOption.VerifyManage) (commandSet *CommandSet, err error) {
-	addr := commandSocket.RemoteAddr().String()
-	ip, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, err
-	}
-
-	commServer := base.Base{
-		Ip:             ip,
-		TimeChannel:    timeChannel,
-		DataSocket:     dataSocket,
-		CommandSocket:  commandSocket,
-		AesGCM:         AesGCM,
-		EncryptionLoss: EncryptionLoss,
-		VerifyManage:   verifyManage,
-	}
-	c := CommandSet{commServer}
-
-	return &c, err
+func NewCommandSet(b base.Base) (*CommandSet, error) {
+	return &CommandSet{b}, nil
 }
 
 // MatchCommand 匹配命令到相应的函数
@@ -58,6 +36,10 @@ func (c *CommandSet) MatchCommand(command comm.Command) {
 			case "get":
 			case "post":
 			}
+		}
+	case "index":
+		switch command.Method {
+		case "get":
 		}
 	}
 }

@@ -22,6 +22,8 @@ import (
 func (p *Pool) checkTask() {
 	for {
 		select {
+		case <-p.ctx.Done():
+			return
 		case fileTask := <-p.waitQueue:
 			// 获取该任务准许的主机
 			var allowHost map[Host]HostStress
@@ -64,6 +66,8 @@ func (p *Pool) addHost(hostAddr string) {
 	var files map[string]file
 	for {
 		select {
+		case <-p.ctx.Done():
+			return
 		case t, ok := <-p.hostStress[hostAddr].tasks:
 			if !ok {
 				return
@@ -82,9 +86,6 @@ func (p *Pool) addHost(hostAddr string) {
 			}
 			p.executeFunc(c, files, p.hostStress[hostAddr], hostAddr)
 			files = make(map[string]file)
-
-		case <-p.ctx.Done():
-			return
 		}
 	}
 }

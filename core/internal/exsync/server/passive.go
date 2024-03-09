@@ -4,7 +4,7 @@ import (
 	"EXSync/core/internal/config"
 	"EXSync/core/internal/exsync/server/commands"
 	loger "EXSync/core/log"
-	serverOption "EXSync/core/option/exsync/server"
+	serverOption "EXSync/core/option/exsync/manage"
 	"fmt"
 	"net"
 )
@@ -61,7 +61,7 @@ func (s *Server) verifyCommandSocket(commandSocket net.Conn) {
 	loger.Log.Infof("Starting to verify command socket connection from %s...", host)
 	if hostInfo, ok := VerifyManage[host]; ok && hostInfo.AesKey != "" {
 		if dataSocket, ok := s.mergeSocketDict[host]["command"]; ok {
-			go commands.NewCommandProcess(host, dataSocket, commandSocket, s.PassiveConnectManage, VerifyManage)
+			go commands.NewCommandProcess(host, dataSocket, commandSocket, s.PassiveConnectManage, VerifyManage, s.ctxServer, s.Trans)
 			if _, ok := s.ActiveConnectManage[host]; !ok {
 				go s.InitClient(host)
 			}
@@ -92,7 +92,7 @@ func (s *Server) verifyDataSocket(dataSocket net.Conn) {
 	loger.Log.Infof("Starting to verify data socket connection from %s...", host)
 	if hostInfo, ok := VerifyManage[host]; ok && hostInfo.AesKey != "" {
 		if commandSocket, ok := s.mergeSocketDict[host]["command"]; ok {
-			go commands.NewCommandProcess(host, dataSocket, commandSocket, s.PassiveConnectManage, VerifyManage)
+			go commands.NewCommandProcess(host, dataSocket, commandSocket, s.PassiveConnectManage, VerifyManage, s.ctxServer, s.Trans)
 			if _, ok := s.ActiveConnectManage[host]; !ok {
 				go s.InitClient(host)
 			}

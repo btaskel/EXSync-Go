@@ -5,6 +5,7 @@ import (
 	"EXSync/core/internal/exsync/client"
 	"EXSync/core/internal/modules/lan"
 	loger "EXSync/core/log"
+	"EXSync/core/option/exsync/manage"
 	serverOption "EXSync/core/option/exsync/server"
 	"strings"
 	"sync"
@@ -18,7 +19,7 @@ var VerifyManage map[string]serverOption.VerifyManage
 func (s *Server) InitClient(ip string) {
 	c, ok := client.NewClient(ip, s.ActiveConnectManage, VerifyManage)
 	if ok {
-		s.ActiveConnectManage[ip] = serverOption.ActiveConnectManage{
+		s.ActiveConnectManage[ip] = manage.ActiveConnectManage{
 			ID:         c.RemoteID,
 			CreateTime: time.Now(),
 			Client:     c,

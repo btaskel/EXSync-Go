@@ -19,8 +19,6 @@ func CreateSyncTable(db *sql.DB) error {
 			    path TEXT,
 			    size INTEGER,
 				hash TEXT,
-				hashBlock TEXT,
-				FillBlock INTEGER,
 				sysDate INTEGER,
 				editDate INTEGER,
 				createDate INTEGER

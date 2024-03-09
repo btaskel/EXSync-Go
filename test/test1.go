@@ -758,13 +758,80 @@ func main() {
 	////fmt.Println(str[:6])
 	//timer := time.NewTicker(1 * time.Second)
 	//fmt.Println(timer)
-	ctx := context.Background()
-	fmt.Println(<-ctx.Done())
-	ctx2, ctx2Cancel := context.WithCancel(ctx)
-	ctx2Cancel()
-	fmt.Println(<-ctx2.Done())
-	ctx3 := context.WithValue(ctx2, "a", "b")
-	fmt.Println(<-ctx3.Done())
+	//ctx := context.Background()
+	//fmt.Println(<-ctx.Done())
+	//ctx2, ctx2Cancel := context.WithCancel(ctx)
+	//ctx2Cancel()
+	//fmt.Println(<-ctx2.Done())
+	//ctx3 := context.WithValue(ctx2, "a", "b")
+	//fmt.Println(<-ctx3.Done())
+
+	//wg := sync.WaitGroup{}
+	//wg.Add(2)
+	//t1(&wg)
+	//t2(&wg)
+	//wg.Wait()
+
+	//var wait = sync.WaitGroup{}
+	//
+	//ctx, cancel := context.WithCancel(context.Background())
+	//wait.Add(1)
+	//go func() {
+	//	GetFile(ctx, &wait)
+	//	fmt.Println(1)
+	//	wait.Done()
+	//}()
+	//fmt.Println("ss")
+	//time.Sleep(1 * time.Second)
+	//cancel()
+	//wait.Wait()
+	buf := make([]byte, 255)
+	addBuf(buf)
+	fmt.Println(buf)
+
+}
+
+func addBuf(b []byte) {
+	b = append(b, 25)
+}
+
+func GetFile(ctx context.Context, wait *sync.WaitGroup) {
+	defer ctx.Done()
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			wait.Done()
+			return
+		}
+	}()
+
+	fmt.Println("start")
+	time.Sleep(2 * time.Second)
+	fmt.Println("over")
+
+}
+
+func t1(wg *sync.WaitGroup) {
+	defer func() {
+		fmt.Println("exit t1")
+	}()
+	go func() {
+		fmt.Println(1)
+		wg.Done()
+		return
+	}()
+	fmt.Println()
+}
+func t2(wg *sync.WaitGroup) {
+	defer func() {
+		fmt.Println("exit t2")
+	}()
+	go func() {
+		fmt.Println(3)
+		wg.Done()
+		return
+	}()
 }
 
 func minKey(m map[string]int) string {

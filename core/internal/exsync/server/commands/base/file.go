@@ -7,6 +7,7 @@ import (
 	"EXSync/core/internal/modules/sqlt"
 	loger "EXSync/core/log"
 	"EXSync/core/option/exsync/comm"
+	"EXSync/core/option/exsync/trans"
 	"fmt"
 	"io"
 	"net"
@@ -29,14 +30,20 @@ func (c *Base) GetFile(data map[string]any) {
 
 	subRoutine := func(remoteRelPath string, fileInfo map[string]any, wait *sync.WaitGroup) {
 		defer wait.Done()
+		var progress float32
+		c.TaskManage[remoteRelPath] = trans.TranTask{
+			DstAddr:  c.Ip,
+			Progress: &progress,
+			Cancel:   nil,
+		}
 
 		remoteOffset, ok := fileInfo["offset"].(int64)
 		if ok {
-			c.direct(fileInfo, remoteRelPath, remoteOffset)
+			//Ctx := c.CtxProcess
+			c.direct(fileInfo, remoteRelPath, remoteOffset, &progress)
 		} else {
-			c.check(fileInfo, remoteRelPath)
+			c.check(fileInfo, remoteRelPath, &progress)
 		}
-
 	}
 
 	var wait sync.WaitGroup
@@ -49,35 +56,37 @@ func (c *Base) GetFile(data map[string]any) {
 	loger.Log.Debugf("passive-GetFile :File a, b begins to transfer")
 }
 
-func (c *Base) sendData(file *os.File, fileMark string, dataBlock, total int64) (err error) {
-	// total = 将会读取多少数据 = remoteSize - localSize
-	s, err := socket.NewSession(nil, c.DataSocket, nil, fileMark, c.AesGCM)
-	if err != nil {
-		return
-	}
-	defer s.Close()
-
-	buffer := make([]byte, dataBlock)
-	var readData int64
-	for {
-		n, err := file.Read(buffer)
-		if err != nil && err != io.EOF {
+// check 检查并判断文件状态进行传输
+func (c *Base) check(fileInfo map[string]any, remoteRelPath string, progress *float32) {
+	sendData := func(file *os.File, fileMark string, dataBlock, total int64) (err error) {
+		// total = 将会读取多少数据 = remoteSize - localSize
+		s, err := socket.NewSession(nil, c.DataSocket, nil, fileMark, c.AesGCM)
+		defer s.Close()
+		if err != nil {
 			return
 		}
-		if n == 0 || readData >= total {
-			break
-		}
-		err = s.SendDataP(buffer)
-		if err != nil {
-			return err
-		}
-		readData += dataBlock
-	}
-	return
-}
 
-// check 检查并判断文件状态进行传输
-func (c *Base) check(fileInfo map[string]any, remoteRelPath string) {
+		var readData int64
+		buffer := make([]byte, dataBlock)
+		for {
+			n, err := file.Read(buffer)
+			if err != nil && err != io.EOF {
+				return
+			}
+			if n == 0 || readData >= total {
+				break
+			}
+			err = s.SendDataP(buffer)
+			if err != nil {
+				return err
+			}
+			v := (float32(readData) / float32(total)) * 100
+			progress = &v
+			readData += dataBlock
+		}
+		return
+	}
+
 	dataBlock := int64(config.PacketSize - 8 - c.EncryptionLoss)
 
 	remoteFileHash, ok := fileInfo["hash"].(string)
@@ -192,7 +201,7 @@ func (c *Base) check(fileInfo map[string]any, remoteRelPath string) {
 						return
 					}
 				}(f)
-				err = c.sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
+				err = sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
 				if err != nil {
 					netErr, ok := err.(net.Error)
 					if ok && netErr.Timeout() {
@@ -217,7 +226,7 @@ func (c *Base) check(fileInfo map[string]any, remoteRelPath string) {
 					return
 				}
 			}(f)
-			err = c.sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
+			err = sendData(f, fileMark, dataBlock, file.Size-remoteFileSize)
 			if err != nil {
 				netErr, ok := err.(net.Error)
 				if ok && netErr.Timeout() {
@@ -241,7 +250,7 @@ func (c *Base) check(fileInfo map[string]any, remoteRelPath string) {
 }
 
 // direct 根据偏移量进行传输
-func (c *Base) direct(fileInfo map[string]any, remoteRelPath string, remoteOffset int64) {
+func (c *Base) direct(fileInfo map[string]any, remoteRelPath string, remoteOffset int64, progress *float32) {
 	dataBlock := int64(config.PacketSize - 8 - c.EncryptionLoss)
 
 	fileMark, ok := fileInfo["fileMark"].(string)
@@ -281,9 +290,17 @@ func (c *Base) direct(fileInfo map[string]any, remoteRelPath string, remoteOffse
 		loger.Log.Errorf("Passive-GetFile-Direct: Local file %s offset failed!", remoteAbsPath)
 		return
 	}
+	stat, err := f.Stat()
+	if err != nil {
+		return
+	}
+	fileSize := stat.Size()
+
+	var readData int64
 	buf := make([]byte, dataBlock)
 	for {
 		n, err := f.Read(buf)
+		readData += int64(n)
 		if err != nil && err == io.EOF {
 			loger.Log.Debugf("Passive-GetFile-Direct: Local file %s successfully transferred!", remoteAbsPath)
 			return
@@ -293,5 +310,7 @@ func (c *Base) direct(fileInfo map[string]any, remoteRelPath string, remoteOffse
 		if err != nil {
 			return
 		}
+		v := (float32(readData) / float32(fileSize)) * 100
+		progress = &v
 	}
 }

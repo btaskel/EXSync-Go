@@ -8,6 +8,7 @@ import (
 	"EXSync/core/internal/modules/timechannel"
 	"EXSync/core/internal/proxy"
 	loger "EXSync/core/log"
+	"EXSync/core/option/exsync/manage"
 	serverOption "EXSync/core/option/exsync/server"
 	"fmt"
 	"net"
@@ -23,13 +24,13 @@ type Client struct {
 	TimeChannel               *timechannel.TimeChannel
 	IP, LocalID, RemoteID     string
 	Comm                      *ext.CommandSet
-	ActiveConnectManage       map[string]serverOption.ActiveConnectManage
+	ActiveConnectManage       map[string]manage.ActiveConnectManage
 	VerifyManage              map[string]serverOption.VerifyManage
 	aesGcm                    *encryption.Gcm
 	commandSocket, dataSocket net.Conn
 }
 
-func NewClient(ip string, activeConnectManage map[string]serverOption.ActiveConnectManage, verifyManage map[string]serverOption.VerifyManage) (*Client, bool) {
+func NewClient(ip string, activeConnectManage map[string]manage.ActiveConnectManage, verifyManage map[string]serverOption.VerifyManage) (*Client, bool) {
 	// 初始化AES-GCM
 	var gcm *encryption.Gcm
 	var err error

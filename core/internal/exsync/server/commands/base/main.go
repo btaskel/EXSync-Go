@@ -4,6 +4,8 @@ import (
 	"EXSync/core/internal/modules/encryption"
 	"EXSync/core/internal/modules/timechannel"
 	serverOption "EXSync/core/option/exsync/server"
+	"EXSync/core/option/exsync/trans"
+	"context"
 	"net"
 )
 
@@ -15,6 +17,8 @@ type Base struct {
 	VerifyManage              map[string]serverOption.VerifyManage
 
 	EncryptionLoss int
+	CtxProcess     context.Context
+	TaskManage     map[string]trans.TranTask
 }
 
 // CheckPermission 检测当前操作与验证信息里的权限是否匹配

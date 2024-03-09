@@ -9,6 +9,7 @@ import (
 	loger "EXSync/core/log"
 	"EXSync/core/option/exsync/comm"
 	clientComm "EXSync/core/option/exsync/comm/client"
+	"context"
 	"errors"
 	"net"
 	"os"
@@ -33,7 +34,7 @@ var (
 // relPaths的数量将决定以多少并发获取文件
 // offset = 0 :本地文件是待续写文件，将会续写；如果本地文件不存在，将会创建
 // offset ≠ 0 :直接根据偏移量获取指定的大小
-func (b *Base) GetFile(inputFiles []clientComm.GetFile) (failedFiles map[string]error, err error) {
+func (b *Base) GetFile(ctx context.Context, inputFiles []clientComm.GetFile) (failedFiles map[string]error, err error) {
 	// 权限验证
 	if !CheckPermission(b.VerifyManage, []string{comm.PermRead}) {
 		return nil, errors.New("MissingPermissions")
@@ -77,12 +78,12 @@ func (b *Base) GetFile(inputFiles []clientComm.GetFile) (failedFiles map[string]
 	session, err := socket.NewSession(b.TimeChannel, nil, b.CommandSocket, hashext.GetRandomStr(6), b.AesGCM)
 	if err != nil {
 		loger.Log.Errorf("Active-GetFile-subRoutine: Create session failed! %s", err)
-		return nil, err
+		return
 	}
 	defer session.Close()
 	_, err = session.SendCommand(command, false, true)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// 单文件传输线程
@@ -98,7 +99,6 @@ func (b *Base) GetFile(inputFiles []clientComm.GetFile) (failedFiles map[string]
 	}
 
 	// 开始传输
-	//loger.Log.Debugf("Active-GetFile: File %s begins to transfer", inputFiles)
 	var wait sync.WaitGroup
 	fileCount := len(inputFiles)
 	failFileChannel := make(chan map[string]error, fileCount)
@@ -107,7 +107,6 @@ func (b *Base) GetFile(inputFiles []clientComm.GetFile) (failedFiles map[string]
 		go subRoutine(inputFile, files, &wait, failFileChannel)
 	}
 	wait.Wait()
-	//loger.Log.Debugf("Active-GetFile: File %s transfer completed", inputFiles)
 	return
 }
 

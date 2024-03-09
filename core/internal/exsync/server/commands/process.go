@@ -2,6 +2,7 @@ package commands
 
 import (
 	"EXSync/core/internal/exsync/server"
+	"EXSync/core/internal/exsync/server/commands/base"
 	"EXSync/core/internal/exsync/server/commands/ext"
 	loger "EXSync/core/log"
 	"EXSync/core/option/exsync/comm"
@@ -9,31 +10,47 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"sync"
 )
 
 // recvCommand  创建指令接收队列, 以map格式接收指令:
-func (c *CommandProcess) recvCommand() {
+func (c *CommandProcess) recvCommand(wg *sync.WaitGroup) {
 	defer func() {
-		c.close = true
+		wg.Done()
 	}()
-	commandSet, err := ext.NewCommandSet(c.TimeChannel, c.DataSocket, c.CommandSocket, c.AesGCM, 28, server.VerifyManage)
+	go func() {
+		select {
+		case <-c.ctxProcess.Done():
+			loger.Log.Debugf("recvCommand cancel: %s", c.ctxProcess.Err())
+			wg.Done()
+			return
+		}
+	}()
+
+	// 创建指令处理对象
+	serverCommBase := base.Base{
+		Ip:             c.IP,
+		TimeChannel:    c.TimeChannel,
+		DataSocket:     c.DataSocket,
+		CommandSocket:  c.CommandSocket,
+		AesGCM:         c.AesGCM,
+		VerifyManage:   server.VerifyManage,
+		EncryptionLoss: 28,
+		CtxProcess:     c.ctxProcess,
+		TaskManage:     c.taskManage,
+	}
+	commandSet, err := ext.NewCommandSet(serverCommBase)
 	if err != nil {
 		loger.Log.Errorf("recvCommand: Failed to initialize commandSet! %s", err)
 		return
 	}
 	var command comm.Command
-	//buf := make([]byte, 4096)
 	for {
-		if c.close {
-			return
-		}
-
 		lengthBuf := make([]byte, 2)
 		_, err := io.ReadFull(c.CommandSocket, lengthBuf)
 		if err != nil {
 			if err == io.EOF {
 				loger.Log.Debugf("Passive-recvCommand: recvCommand connection disconnected from host %s.", c.IP)
-				c.close = true
 				return
 			} else {
 				continue
@@ -45,8 +62,6 @@ func (c *CommandProcess) recvCommand() {
 		if err != nil {
 			if err == io.EOF {
 				loger.Log.Debugf("Passive-recvCommand: connection disconnected from host %s.", c.IP)
-				c.close = true
-				return
 			} else {
 				loger.Log.Errorf("Passive-recvCommand: Failed to receive data sent from CommandSocket from host %s", c.IP)
 			}
@@ -65,22 +80,25 @@ func (c *CommandProcess) recvCommand() {
 }
 
 // recvData 创建数据接收队列
-func (c *CommandProcess) recvData() {
+func (c *CommandProcess) recvData(wg *sync.WaitGroup) {
 	defer func() {
-		c.close = true
+		wg.Done()
 	}()
-
-	for {
-		if c.close {
+	go func() {
+		select {
+		case <-c.ctxProcess.Done():
+			loger.Log.Debugf("recvCommand cancel: %s", c.ctxProcess.Err())
+			wg.Done()
 			return
 		}
-
+	}()
+	for {
 		lengthBuf := make([]byte, 2)
 		_, err := io.ReadFull(c.DataSocket, lengthBuf)
 		if err != nil {
 			if err == io.EOF {
 				loger.Log.Debugf("Passive-recvData: Passive connection disconnected from host %s.", c.IP)
-				c.close = true
+
 				return
 			} else {
 				continue
@@ -92,7 +110,6 @@ func (c *CommandProcess) recvData() {
 		if err != nil {
 			if err == io.EOF {
 				loger.Log.Debugf("Passive-recvData: Passive connection disconnected from host %s.", c.IP)
-				c.close = true
 				return
 			} else {
 				continue

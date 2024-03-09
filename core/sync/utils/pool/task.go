@@ -2,6 +2,7 @@ package pool
 
 import (
 	"EXSync/core/internal/exsync/client"
+	"EXSync/core/internal/exsync/server"
 	loger "EXSync/core/log"
 	clientComm "EXSync/core/option/exsync/comm/client"
 )
@@ -29,31 +30,46 @@ func (p *Pool) executeFunc(c *client.Client, files map[string]file, hostStress H
 		fs = append(fs, f)
 	}
 
-	failedFiles, err := c.Comm.GetFile(fs)
-	if err != nil {
-		// 批量拉取文件发送错误
-		loger.Log.Warningf("pool: %s", err)
+	errResultChan := make(chan map[string]error)
+	errChan := make(chan error)
+
+	go func() {
+		failedFiles, err := c.Comm.GetFile(p.ctx, fs)
+		if err != nil {
+			errChan <- err
+		} else {
+			errResultChan <- failedFiles
+		}
+	}()
+
+	select {
+	case <-p.ctx.Done():
+		loger.Log.Infof("executeFunc -> %s: Canceled GetFile operation", c.IP)
+		return
+	case failedFiles := <-errResultChan:
+		for failedFileName, failedErr := range failedFiles {
+			loger.Log.Warningf("executeFunc -> %s: File %s Get failed, %s!", c.IP, failedFileName, failedErr)
+
+			hosts := files[failedFileName].Hosts
+			if len(hosts) == 1 {
+				// todo: 没有备用主机, 取消传输
+				server.Fails <- map[string]error{failedFileName: failedErr}
+			}
+			for n, host := range hosts {
+				if host == hostAddr {
+					fileTask := files[failedFileName]
+					fileTask.Hosts = append(fileTask.Hosts[:n], fileTask.Hosts[n+1:]...)
+
+					// 重新追加到waitQueue
+					p.waitQueue <- fileTask
+					break
+				}
+			}
+		}
+		return
+	case errInfo := <-errChan:
+		loger.Log.Warningf("executeFunc -> %s: %s !", c.IP, errInfo)
 		return
 	}
 
-	for failedFileName, failedErr := range failedFiles {
-		loger.Log.Warningf("")
-		// todo: 此处汇报上层
-
-		hosts := files[failedFileName].Hosts
-		if len(hosts) == 1 {
-			// todo: 没有备用主机, 取消传输
-		}
-		for n, host := range hosts {
-			if host == hostAddr {
-				fileTask := files[failedFileName]
-				fileTask.Hosts = append(fileTask.Hosts[:n], fileTask.Hosts[n+1:]...)
-
-				// 重新追加到waitQueue
-				p.waitQueue <- fileTask
-				break
-			}
-		}
-	}
-	return
 }

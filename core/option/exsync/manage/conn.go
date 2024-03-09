@@ -1,8 +1,9 @@
-package serverOption
+package manage
 
 import (
 	"EXSync/core/internal/exsync/client"
 	"EXSync/core/internal/exsync/server/commands"
+	"context"
 	"time"
 )
 
@@ -18,4 +19,5 @@ type PassiveConnectManage struct {
 	ID             string
 	CreateTime     time.Time
 	CommandProcess *commands.CommandProcess
+	Cancel         context.CancelFunc // 取消连接
 }

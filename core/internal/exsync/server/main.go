@@ -3,7 +3,9 @@ package server
 import (
 	"EXSync/core/internal/config"
 	"EXSync/core/internal/exsync/server/commands/ext"
-	serverOption "EXSync/core/option/exsync/server"
+	"EXSync/core/option/exsync/manage"
+	serverOption "EXSync/core/option/exsync/trans"
+	"context"
 	"net"
 	"runtime"
 	"sync"
@@ -11,12 +13,15 @@ import (
 )
 
 type Server struct {
-	ActiveConnectManage    map[string]serverOption.ActiveConnectManage  // 当前主机主动连接远程主机的实例管理
-	PassiveConnectManage   map[string]serverOption.PassiveConnectManage // 当前主机被动连接远程主机的实例管理
+	manage.TaskManage
+	manage.Lock
+	ActiveConnectManage    map[string]manage.ActiveConnectManage  // 当前主机主动连接远程主机的实例管理
+	PassiveConnectManage   map[string]manage.PassiveConnectManage // 当前主机被动连接远程主机的实例管理
 	mergeSocketDict        map[string]map[string]net.Conn
 	commandSet             *ext.CommandSet
 	commListen, dataListen net.Listener
 	stopServer             bool
+	ctxServer              context.Context
 }
 
 // NewServer 创建传输服务对象
@@ -26,9 +31,11 @@ func NewServer() *Server {
 
 	// 创建服务实例
 	server := Server{
-		ActiveConnectManage:  make(map[string]serverOption.ActiveConnectManage),
-		PassiveConnectManage: make(map[string]serverOption.PassiveConnectManage),
+		TaskManage:           manage.TaskManage{Trans: make(map[string]serverOption.TranTask)},
+		ActiveConnectManage:  make(map[string]manage.ActiveConnectManage),
+		PassiveConnectManage: make(map[string]manage.PassiveConnectManage),
 		mergeSocketDict:      make(map[string]map[string]net.Conn),
+		ctxServer:            context.Background(),
 	}
 
 	return &server

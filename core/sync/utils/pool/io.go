@@ -3,14 +3,9 @@ package pool
 import (
 	"EXSync/core/internal/exsync/client"
 	configOption "EXSync/core/option/config"
-	serverOption "EXSync/core/option/exsync/server"
+	serverOption "EXSync/core/option/exsync/manage"
 	"context"
 )
-
-type StressManage struct {
-	threads  int // 每个主机最大并发数
-	queueNum int // 每个主机最大等待队列 default: 64
-}
 
 type file struct {
 	RelPath   string
@@ -32,7 +27,8 @@ type HostStress = *struct {
 }
 
 type Pool struct {
-	StressManage
+	threads             int // 每个主机最大并发数
+	queueNum            int // 每个主机最大等待队列 default: 64
 	waitQueue           chan file
 	hostStress          map[Host]HostStress
 	activeConnectManage map[string]serverOption.ActiveConnectManage
@@ -44,6 +40,7 @@ func NewFilePool(ctx context.Context, ActiveConnectManage map[string]serverOptio
 		waitQueue:           make(chan file),
 		hostStress:          make(map[Host]HostStress),
 		activeConnectManage: ActiveConnectManage,
+		ctx:                 ctx,
 	}
 	pool.ScanHost()
 	go pool.checkTask()

@@ -15,7 +15,7 @@ type TimeChannel struct {
 // NewTimeChannel 创建一个数据接收队列, 每个队列默认最大使用2MB内存
 func NewTimeChannel() *TimeChannel {
 	return &TimeChannel{
-		make(map[string]chan []byte, 512),
+		make(map[string]chan []byte, 32),
 		sync.Mutex{},
 	}
 }
