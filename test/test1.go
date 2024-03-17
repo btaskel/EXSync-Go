@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -785,10 +786,36 @@ func main() {
 	//time.Sleep(1 * time.Second)
 	//cancel()
 	//wait.Wait()
-	buf := make([]byte, 255)
-	addBuf(buf)
-	fmt.Println(buf)
+	//buf := make([]byte, 255)
+	//addBuf(buf)
+	//fmt.Println(buf)
 
+	fmt.Println(walk(".\\test"))
+}
+
+func walk(walkPath string) ([]string, error) {
+	var filePaths []string
+	files, err := os.ReadDir(walkPath)
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			//fmt.Println(file.Name())
+			//fmt.Println(filepath.Join(walkPath, file.Name()))
+			subFiles, err := walk(filepath.Join(walkPath, file.Name()))
+			if err != nil {
+				fmt.Println(err)
+				return nil, err
+			}
+			filePaths = append(filePaths, subFiles...)
+		} else {
+			filePaths = append(filePaths, filepath.Join(walkPath, file.Name()))
+		}
+	}
+	return filePaths, nil
 }
 
 func addBuf(b []byte) {

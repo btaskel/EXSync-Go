@@ -313,6 +313,7 @@ func CreateConfig() (err error) {
 			Path      string   `json:"path"`
 			Interval  int      `json:"interval"`
 			Active    bool     `json:"active"`
+			Monitor   bool     `json:"monitor"`
 			Devices   []string `json:"devices"`
 		}{
 			{
@@ -320,6 +321,7 @@ func CreateConfig() (err error) {
 				Path:      "",
 				Interval:  30,
 				Active:    true,
+				Monitor:   false,
 				Devices:   []string{""},
 			},
 		},

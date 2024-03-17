@@ -6,12 +6,12 @@ import (
 )
 
 func InsertFile(db *sql.DB, f *index.File) (err error) {
-	insertSQL := `INSERT INTO sync (path, size, hash,hashblock, sysDate, editDate, createDate) VALUES (?,?,?,?,?,?,?)`
+	insertSQL := `INSERT INTO sync (path, size, hash, editDate, createDate) VALUES (?,?,?,?,?)`
 	statement, err := db.Prepare(insertSQL)
 	if err != nil {
 		return err
 	}
-	_, err = statement.Exec(f.Path, f.Size, f.Hash, f.HashBlock, f.SystemDate, f.EditDate, f.CreateDate)
+	_, err = statement.Exec(f.Path, f.Size, f.Hash, f.EditDate, f.CreateDate)
 	if err != nil {
 		return err
 	}

@@ -42,6 +42,7 @@ type ConfigStruct struct {
 		Path      string   `json:"path"`
 		Interval  int      `json:"interval"`
 		Active    bool     `json:"active"`
+		Monitor   bool     `json:"monitor"`
 		Devices   []string `json:"devices"`
 	} `json:"userdata"`
 	Version float64 `json:"version"`
@@ -53,6 +54,7 @@ type UdDict struct {
 	Path      string
 	Interval  int
 	Active    bool
+	Monitor   bool
 	Db        *sql.DB
 	Devices   []string
 }

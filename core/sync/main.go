@@ -10,7 +10,6 @@ type Sync struct {
 }
 
 func (s *Sync) NewSync() {
-
 	// 运行服务
 	ser := server.NewServer()
 	ser.Run()

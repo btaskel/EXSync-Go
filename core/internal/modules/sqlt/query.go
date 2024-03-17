@@ -9,7 +9,7 @@ import (
 func QueryFile(db *sql.DB, path string) (f *index.File, err error) {
 	row := db.QueryRow(`SELECT * FROM sync WHERE path = ?`, path)
 	file := index.File{}
-	err = row.Scan(&file.ID, &file.Path, &file.Size, &file.Hash, &file.HashBlock, &file.SystemDate, &file.EditDate, &file.CreateDate)
+	err = row.Scan(&file.ID, &file.Path, &file.Size, &file.Hash, &file.EditDate, &file.CreateDate)
 	if err != nil {
 		return nil, err
 	}

@@ -1,0 +1,5 @@
+package double
+
+func NewDouble() {
+
+}

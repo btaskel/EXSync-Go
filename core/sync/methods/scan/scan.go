@@ -3,14 +3,14 @@ package scan
 import "database/sql"
 
 // Compare 比较远程数据库
-func (s *SpaceScan) Compare(remoteDB *sql.DB) (syncFiles map[string]int, err error) {
+func (s *SpaceScan) Compare(remoteDB *sql.DB) (syncFiles map[string]int, total int64, err error) {
 	localRows, err := s.localDB.Query(`SELECT path, size ,hash,editDate FROM sync`)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	remoteRows, err := remoteDB.Query(`SELECT path, size, hash, editDate FROM sync`)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	for localRows.Next() {
@@ -19,7 +19,7 @@ func (s *SpaceScan) Compare(remoteDB *sql.DB) (syncFiles map[string]int, err err
 
 		err = localRows.Scan(&path, &size, &hash)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		s.localFiles[path] = info{
 			hash:     hash,
@@ -33,15 +33,17 @@ func (s *SpaceScan) Compare(remoteDB *sql.DB) (syncFiles map[string]int, err err
 		var size, editDate int64
 		err = remoteRows.Scan(&path, &hash, &size, &editDate)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		if localFileInfo, ok := s.localFiles[path]; ok {
 			if editDate > localFileInfo.editDate && hash != localFileInfo.hash {
 				syncFiles[path] = 1 // 对方文件为已更新文件
+				total += size
 			}
 		} else {
 			syncFiles[path] = 0 // 本地文件不存在
+			total += size
 		}
 	}
 	return
