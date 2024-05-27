@@ -46,7 +46,7 @@ func pickStaticStream() {
 }
 
 // newTCPStream with Cipher
-func newTCPStream(twc *TCPWithCipher) (*TCPStream, error) {
+func newTCPStream(twc *TCPWithCipher) (Stream, error) {
 	tcpStreamID, err := getTCPStreamID()
 	if err != nil {
 		return nil, err
@@ -108,10 +108,10 @@ func (c *TCPStream) LocalAddr() net.Addr {
 }
 
 // Close 关闭一个多路复用数据流
-func (c *TCPStream) Close() {
+func (c *TCPStream) Close() error {
 	c.mc.Del(c.id)
 	delete(StreamInUse, c.id)
-	return
+	return nil
 }
 
 func (c *TCPStream) GetIVLen() int {

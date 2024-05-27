@@ -5,6 +5,7 @@ import (
 	"EXSync/core/log"
 	"EXSync/core/transport/compress"
 	"EXSync/core/transport/encrypt"
+	"context"
 	"encoding/binary"
 	"errors"
 	"net"
@@ -12,7 +13,7 @@ import (
 )
 
 // TCPDial Client Dial
-func TCPDial(address string, timeout time.Duration) (*TCPWithCipher, error) {
+func TCPDial(address string, timeout time.Duration) (Conn, error) {
 	conn, err := net.DialTimeout("tcp", address, timeout)
 	if err != nil {
 		return nil, err
@@ -21,12 +22,24 @@ func TCPDial(address string, timeout time.Duration) (*TCPWithCipher, error) {
 }
 
 // TCPListen Server listener
-func TCPListen(address string) (listener net.Listener, err error) {
-	listener, err = net.Listen("tcp", address)
+func TCPListen(address string) (listener Listener, err error) {
+	l, err := net.Listen("tcp", address)
 	if err != nil {
 		return
 	}
-	return listener, nil
+	return &TCPListener{Listener: l}, nil
+}
+
+type TCPListener struct {
+	net.Listener
+}
+
+func (c *TCPListener) Accept(ctx context.Context) (Conn, error) {
+	conn, err := c.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	return NewTCPWithCipher(conn)
 }
 
 type TCPWithCipher struct {
@@ -118,13 +131,8 @@ func (c *TCPWithCipher) tcpStreamRecv() {
 }
 
 // OpenStream 创建多路复用数据流
-func (c *TCPWithCipher) OpenStream() (*TCPStream, error) {
+func (c *TCPWithCipher) OpenStream(ctx context.Context) (Stream, error) {
 	return newTCPStream(c)
-}
-
-// CloseStream 关闭一个TCP多路复用流
-func (c *TCPWithCipher) CloseStream(stream Stream) {
-	stream.Close()
 }
 
 // Close 释放TCPWithCipher
