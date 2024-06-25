@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+var (
+	ErrTimeout    = errors.New("timeout")
+	ErrClosedConn = errors.New("ClosedConn")
+)
+
 var timeout = time.Duration(5) * time.Second
 
 type LeakyBuf struct {
@@ -12,6 +17,7 @@ type LeakyBuf struct {
 	freeBuf chan []byte
 	usedBuf chan []byte
 	err     error
+	errChan chan error
 }
 
 // NewLeakyBuf 创建一个通道长度是n, buf大小是bufSize的LeakyBuf
@@ -22,6 +28,7 @@ func NewLeakyBuf(n, bufSize int) *LeakyBuf {
 		freeBuf: fc,
 		usedBuf: uc,
 		bufSize: bufSize,
+		errChan: make(chan error, 1),
 	}
 }
 
@@ -33,17 +40,35 @@ func initChan(n, bufSize int) chan []byte {
 	return c
 }
 
-// Pick 获取已使用的LeakyBuf，并将结果存储到slice中, 该操作会修改原切片
-func (c *LeakyBuf) Pick(slice *[]byte) (int, error) {
+// PickTimeout 获取已使用的LeakyBuf，并将结果存储到slice中, 该操作会修改原切片。
+func (c *LeakyBuf) PickTimeout(slice *[]byte) (int, error) {
 	select {
 	case buf := <-c.usedBuf:
+		dataLen := len(buf)
 		copy(*slice, buf)
 		buf = buf[:0]
 		c.freeBuf <- buf
-		return len(buf), nil
+		return dataLen, nil
 	case <-time.After(timeout):
-		c.err = errors.New("timeout")
-		return 0, c.err
+		if c.err != nil {
+			return 0, c.err
+		}
+		return 0, ErrTimeout
+	}
+}
+
+// Pick 获取已使用的LeakyBuf，并将结果存储到slice中, 该操作会修改原切片，如果获取不到则阻塞。
+func (c *LeakyBuf) Pick(slice *[]byte) (int, error) {
+	select {
+	case buf := <-c.usedBuf:
+		dataLen := len(buf)
+		copy(*slice, buf)
+		buf = buf[:0]
+		c.freeBuf <- buf
+		return dataLen, nil
+	case err := <-c.errChan:
+		c.errChan <- err
+		return 0, err
 	}
 }
 
@@ -55,56 +80,17 @@ func (c *LeakyBuf) Put(slice *[]byte) error {
 		c.usedBuf <- buf
 		return nil
 	case <-time.After(timeout):
-		c.err = errors.New("timeout")
-		return c.err
+		if c.err != nil {
+			return c.err
+		}
+		return ErrTimeout
 	}
 }
 
-//// PickFreeBuf 获取一个空的切片, 超时则返回nil
-//func (c *LeakyBuf) PickFreeBuf(slice *[]byte) error {
-//	select {
-//	case buf := <-c.freeBuf:
-//		copy(*slice, buf[:buf[c.bufSize-1]])
-//		return nil
-//	case <-time.After(timeout):
-//		c.err = errors.New("timeout")
-//		return c.err
-//	}
-//}
-
-//// PutFreeBuf 回放一个空闲切片
-//func (c *LeakyBuf) PutFreeBuf(buf []byte) error {
-//	if len(buf) != c.bufSize {
-//		return errors.New("invalid buffer size that's put into leaky buffer")
-//	}
-//	buf = buf[:0]
-//	c.freeBuf <- buf
-//	return nil
-//}
-//
-//// PickUsedBuf 获取一个已经使用了的切片, 超时则返回nil
-//func (c *LeakyBuf) PickUsedBuf() []byte {
-//	select {
-//	case buf := <-c.usedBuf:
-//		return buf
-//	case <-time.After(timeout):
-//		return nil
-//	}
-//}
-//
-//// PutUsedBuf 回放一个已经使用的切片
-//func (c *LeakyBuf) PutUsedBuf(buf []byte) error {
-//	if len(buf) != c.bufSize {
-//		return errors.New("invalid buffer size that's put into leaky buffer")
-//	}
-//	select {
-//	case c.usedBuf <- buf:
-//	default:
-//	}
-//	return nil
-//}
-
-func (c *LeakyBuf) Close() {
+// Close 设置终止错误
+func (c *LeakyBuf) Close(err error) {
 	close(c.freeBuf)
 	close(c.usedBuf)
+	c.err = err
+	c.errChan <- err
 }

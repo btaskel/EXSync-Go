@@ -7,7 +7,6 @@ import (
 )
 
 const (
-	Null      = ""
 	Aes128Gcm = "aes-128-gcm"
 	Aes192Gcm = "aes-192-gcm"
 	Aes256Gcm = "aes-256-gcm"
@@ -31,7 +30,6 @@ func (c *cipherInfo) GetKeyLen() int {
 }
 
 var cipherMethod = map[string]*cipherInfo{
-	Null:                  {0, 0, 0, nil},
 	Aes128Gcm:             {16, 12, 28, newAESGCM}, // iv: 12, tag: 16
 	Aes192Gcm:             {24, 16, 28, newAESGCM},
 	Aes256Gcm:             {32, 16, 28, newAESGCM},

@@ -1,37 +1,23 @@
 package transport
 
 import (
-	"EXSync/core/internal/config"
-	"EXSync/core/log"
+	logger "EXSync/core/log"
 	"EXSync/core/transport/compress"
 	"EXSync/core/transport/encrypt"
+	"EXSync/core/transport/leakybuf"
 	"context"
-	"encoding/binary"
-	"errors"
 	"net"
-	"time"
+	"sync"
 )
 
-// TCPDial Client Dial
-func TCPDial(address string, timeout time.Duration) (Conn, error) {
-	conn, err := net.DialTimeout("tcp", address, timeout)
-	if err != nil {
-		return nil, err
-	}
-	return NewTCPWithCipher(conn)
-}
-
-// TCPListen Server listener
-func TCPListen(address string) (listener Listener, err error) {
-	l, err := net.Listen("tcp", address)
-	if err != nil {
-		return
-	}
-	return &TCPListener{Listener: l}, nil
+func newTCPListener(listener net.Listener, aeadMethod, compressorMethod string) *TCPListener {
+	return &TCPListener{listener, aeadMethod, compressorMethod}
 }
 
 type TCPListener struct {
 	net.Listener
+	aeadMethod       string
+	compressorMethod string
 }
 
 func (c *TCPListener) Accept(ctx context.Context) (Conn, error) {
@@ -39,108 +25,149 @@ func (c *TCPListener) Accept(ctx context.Context) (Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewTCPWithCipher(conn)
+
+	return NewTCPConn(conn, tcpConnOption{
+		AEADMethod: c.aeadMethod,
+		Compressor: c.compressorMethod,
+	})
 }
 
-type TCPWithCipher struct {
-	net.Conn
-	mc     *MapChannel
-	cipher *encrypt.Cipher
+type streamRequest struct {
+	subRejectNum int
+	prevID       []byte
+}
 
-	compressor     compress.Compress
+type tcpWithCipher struct {
+	// obj
+	conn       net.Conn
+	compressor compress.Compress
+	cipher     *encrypt.Cipher
+	mc         *MapChannel
+
+	mutex        sync.Mutex
+	streamOffset uint32
+	streamMap    map[string]streamRequest
+	rejectNum    uint32 // stream reject counter
+	maxRejectNum uint32 // Maximum allowed rejected connections per minute
+
+	// attr
+	socketDataLen  int
 	compressorLoss int
-
-	err error
+	err            error
 }
 
-func NewTCPWithCipher(conn net.Conn) (tcpConn *TCPWithCipher, err error) {
-	cip, err := encrypt.NewCipher(config.Config.Server.Setting.Encryption, config.Config.Server.Addr.Password)
-	if err != nil {
-		return
-	}
-	compressor, n, err := compress.NewCompress("", SocketSize-2-4)
-	if err != nil {
-		return nil, err
-	}
-	tcpConn = &TCPWithCipher{
-		Conn:   conn,
-		mc:     NewTimeChannel(),
-		cipher: cip,
+type tcpConnOption struct {
+	AEADMethod string
+	Compressor string
+}
 
-		compressor:     compressor,
-		compressorLoss: n,
+func NewTCPConn(conn net.Conn, option tcpConnOption) (tcpConn *TCPConn, err error) {
+	var cip *encrypt.Cipher
+	if option.AEADMethod != "" {
+		cip, err = encrypt.NewCipher(option.AEADMethod, option.AEADMethod)
+		if err != nil {
+			return
+		}
 	}
-	if err != nil {
-		return
+
+	var n int
+	var compressor compress.Compress
+	if option.Compressor != "" {
+		compressor, n, err = compress.NewCompress(option.Compressor, SocketSize-2-4)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	socketDataLen := SocketSize - (n + cip.Info.GetIvLen() + streamIDSize)
+
+	tcpConn = &TCPConn{
+		tcpWithCipher{
+			conn:       conn,
+			mc:         NewTimeChannel(),
+			cipher:     cip,
+			compressor: compressor,
+
+			mutex:        sync.Mutex{},
+			streamOffset: 2, // 流ID起始位置
+
+			socketDataLen:  socketDataLen,
+			compressorLoss: n,
+		},
+		nil,
+		make([]byte, socketDataLen),
 	}
 	go tcpConn.tcpStreamRecv()
+
+	tcpConn.err = tcpConn.mc.CreateRecv(string(defaultControlStream))
+	if tcpConn.err != nil {
+		logger.Fatalf("Transport-TCP-initDefaultStream: %s", tcpConn.err)
+		return
+	}
+
 	return tcpConn, nil
 }
 
-func (c *TCPWithCipher) tcpStreamRecv() {
-	defer func() {
-		c.err = errors.New("tcpStreamRecv stopped")
-	}()
+type TCPConn struct {
+	tcpWithCipher
+	defaultStream *TCPStream
+	comByte       []byte
+}
 
-	dataBuf := make([]byte, SocketSize)
-	dataLenBuf := make([]byte, 2)
-	var n int
-	var dataLen uint16
+func (c *TCPConn) AcceptStream(ctx context.Context) (Stream, error) {
+	return c.parseStream()
+}
 
-	compressDstBuf := c.compressor.GetDstBuf()
-	for {
-		// 处理粘包
-		_, c.err = c.Conn.Read(dataLenBuf)
-		if c.err != nil {
-			logger.Debug(c.err)
-			return
-		}
-		dataLen = binary.BigEndian.Uint16(dataLenBuf)
-		n, c.err = c.Conn.Read(dataBuf[:dataLen])
-		if c.err != nil {
-			return
-		}
-
-		// 解密内容
-		if c.cipher != nil {
-			c.err = c.cipher.Decrypt(dataBuf[:dataLen])
-			if c.err != nil {
-				continue
-			}
-		}
-
-		// 解压缩
-		if c.compressor != nil {
-			n, c.err = c.compressor.UnCompressData(dataBuf[:dataLen], compressDstBuf)
-			if c.err != nil {
-				return
-			}
-			c.err = c.mc.Push(string(compressDstBuf[:n][:4]), compressDstBuf[4:n])
-			if c.err != nil {
-				logger.Errorf("tcpStreamRecv %s->%s: timeout!", c.RemoteAddr(), c.LocalAddr())
-				return
-			}
-		} else {
-			c.err = c.mc.Push(string(dataBuf[:dataLen][:4]), dataBuf[:dataLen][4:])
-			if c.err != nil {
-				logger.Errorf("tcpStreamRecv %s->%s: timeout!", c.RemoteAddr(), c.LocalAddr())
-				return
-			}
-		}
-	}
+func (c *TCPConn) OpenStreamSync(ctx context.Context) (Stream, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 // OpenStream 创建多路复用数据流
-func (c *TCPWithCipher) OpenStream(ctx context.Context) (Stream, error) {
-	return newTCPStream(c)
+func (c *TCPConn) OpenStream() (Stream, error) {
+	return newTCPStream(&c.tcpWithCipher, "")
 }
 
 // Close 释放TCPWithCipher
-func (c *TCPWithCipher) Close() error {
-	c.mc.Close()
-	err := c.Conn.Close()
+func (c *TCPConn) Close() error {
+	c.mc.Close(leakybuf.ErrClosedConn)
+	err := c.conn.Close()
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+// write 默认写入指定的Stream
+func (c *TCPConn) Write(b []byte, streamID []byte) (int, error) {
+	// 增加长度首部
+	b[0] = byte((len(b) >> 8) & 255)
+	b[1] = byte(len(b) & 255)
+
+	// 增加流id
+	copy(b[2:streamIDSize-1], streamID)
+
+	// 压缩
+	if c.compressor != nil {
+		// dataLen +
+		var n int
+		n, c.err = c.compressor.CompressData(b[2+streamIDSize+1-1:], c.comByte)
+		if c.err != nil || n == 0 {
+			return 0, c.err
+		}
+	}
+
+	// 进行加密
+	if c.cipher != nil {
+		c.err = c.cipher.Encrypt(c.comByte)
+		if c.err != nil {
+			return 0, c.err
+		}
+	}
+	var n int
+	n, c.err = c.conn.Write(c.comByte)
+	if c.err != nil {
+		return n, c.err
+	}
+	return n, c.err
 }
