@@ -43,8 +43,8 @@ func (c *MapChannel) Push(mark string, buf []byte) error {
 	return nil
 }
 
-// PullTimeout 获取指定mark的首部，如果超时则返回timeout错误
-func (c *MapChannel) PullTimeout(mark string, buf *[]byte) (int, error) {
+// PopTimeout 获取指定mark的首部，如果超时则返回timeout错误
+func (c *MapChannel) PopTimeout(mark string, buf *[]byte) (int, error) {
 	n, err := c.mapChan[mark].PickTimeout(buf)
 	if err != nil {
 		return 0, err
@@ -52,8 +52,8 @@ func (c *MapChannel) PullTimeout(mark string, buf *[]byte) (int, error) {
 	return n, nil
 }
 
-// Pull 获取指定mark的首部，如果超时则返回timeout错误
-func (c *MapChannel) Pull(mark string, buf *[]byte) (int, error) {
+// Pop 获取指定mark的首部，如果超时则返回timeout错误
+func (c *MapChannel) Pop(mark string, buf *[]byte) (int, error) {
 	return c.mapChan[mark].Pick(buf)
 }
 

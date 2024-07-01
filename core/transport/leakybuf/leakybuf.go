@@ -5,12 +5,14 @@ import (
 	"time"
 )
 
+const (
+	timeout = time.Duration(5) * time.Second
+)
+
 var (
 	ErrTimeout    = errors.New("timeout")
 	ErrClosedConn = errors.New("ClosedConn")
 )
-
-var timeout = time.Duration(5) * time.Second
 
 type LeakyBuf struct {
 	bufSize int

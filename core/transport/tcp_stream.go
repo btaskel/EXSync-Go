@@ -27,10 +27,8 @@ type TCPStream struct {
 }
 
 // newTCPStream with Cipher
+// 如果streamID为空，则自动选择StreamID
 func newTCPStream(twc *tcpWithCipher, streamID string) (Stream, error) {
-	if streamID == "" {
-
-	}
 
 	tc := &TCPStream{tcpWithCipher: twc,
 		DataStart: twc.cipher.Info.GetIvLen() + streamIDSize - 1 + 2, // +2 DataLen
@@ -50,7 +48,7 @@ func newTCPStream(twc *tcpWithCipher, streamID string) (Stream, error) {
 // Read Stream With Cipher
 // dataLen -> cipherText -> uncompressedText -> multiplexing -> plainText
 func (c *TCPStream) Read(b []byte) (int, error) {
-	c.rn, c.err = c.mc.PullTimeout(c.id, &b)
+	c.rn, c.err = c.mc.PopTimeout(c.id, &b)
 	if c.err != nil {
 		return 0, c.err
 	}

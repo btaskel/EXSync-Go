@@ -44,11 +44,13 @@ type tcpWithCipher struct {
 	cipher     *encrypt.Cipher
 	mc         *MapChannel
 
-	mutex        sync.Mutex
-	streamOffset uint32
-	streamMap    map[string]streamRequest
-	rejectNum    uint32 // stream reject counter
-	maxRejectNum uint32 // Maximum allowed rejected connections per minute
+	taskMap           map[string]Stream // key: streamID, value: Stream obj
+	streamOffsetMutex sync.Mutex
+	streamOffset      uint32
+	streamMap         map[string]streamRequest
+	rejectNumMutex    sync.Mutex
+	rejectNum         uint32 // stream reject counter
+	maxRejectNum      uint32 // Maximum allowed rejected connections per minute
 
 	// attr
 	socketDataLen  int
@@ -82,14 +84,14 @@ func NewTCPConn(conn net.Conn, option tcpConnOption) (tcpConn *TCPConn, err erro
 	socketDataLen := SocketSize - (n + cip.Info.GetIvLen() + streamIDSize)
 
 	tcpConn = &TCPConn{
-		tcpWithCipher{
+		&tcpWithCipher{
 			conn:       conn,
 			mc:         NewTimeChannel(),
 			cipher:     cip,
 			compressor: compressor,
 
-			mutex:        sync.Mutex{},
-			streamOffset: 2, // 流ID起始位置
+			streamOffsetMutex: sync.Mutex{},
+			streamOffset:      2, // 流ID起始位置
 
 			socketDataLen:  socketDataLen,
 			compressorLoss: n,
@@ -109,23 +111,22 @@ func NewTCPConn(conn net.Conn, option tcpConnOption) (tcpConn *TCPConn, err erro
 }
 
 type TCPConn struct {
-	tcpWithCipher
+	*tcpWithCipher
 	defaultStream *TCPStream
 	comByte       []byte
 }
 
 func (c *TCPConn) AcceptStream(ctx context.Context) (Stream, error) {
-	return c.parseStream()
+	return c.getControlStreamByte(make([]byte, c.socketDataLen))
 }
 
 func (c *TCPConn) OpenStreamSync(ctx context.Context) (Stream, error) {
-	//TODO implement me
-	panic("implement me")
+	return c.getStream(ctx, -1)
 }
 
 // OpenStream 创建多路复用数据流
 func (c *TCPConn) OpenStream() (Stream, error) {
-	return newTCPStream(&c.tcpWithCipher, "")
+	return c.getStream(context.Background(), 5)
 }
 
 // Close 释放TCPWithCipher
@@ -139,7 +140,7 @@ func (c *TCPConn) Close() error {
 }
 
 // write 默认写入指定的Stream
-func (c *TCPConn) Write(b []byte, streamID []byte) (int, error) {
+func (c *TCPConn) Write(b, streamID []byte) (int, error) {
 	// 增加长度首部
 	b[0] = byte((len(b) >> 8) & 255)
 	b[1] = byte(len(b) & 255)
