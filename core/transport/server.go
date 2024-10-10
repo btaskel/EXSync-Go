@@ -2,7 +2,6 @@ package transport
 
 import (
 	"crypto/tls"
-	"errors"
 	"github.com/quic-go/quic-go"
 	"net"
 	"strings"
@@ -13,6 +12,7 @@ type ConfOption struct {
 	ConfQUIC *quic.Config
 
 	AEADMethod       string
+	AEADPassword     string
 	CompressorMethod string
 }
 
@@ -27,13 +27,13 @@ func Listen(network, addr string, Conf ConfOption) (Listener, error) {
 			if err != nil {
 				return nil, err
 			}
-			return newTCPListener(listener, Conf.AEADMethod, Conf.CompressorMethod), nil
+			return newTCPListener(listener, Conf.AEADMethod, Conf.AEADPassword, Conf.CompressorMethod), nil
 		} else {
 			listener, err := net.Listen(network, addr)
 			if err != nil {
 				return nil, err
 			}
-			return newTCPListener(listener, Conf.AEADMethod, Conf.CompressorMethod), nil
+			return newTCPListener(listener, Conf.AEADMethod, Conf.AEADPassword, Conf.CompressorMethod), nil
 		}
 	case "quic":
 		l, err := quic.ListenAddr(addr, Conf.ConfTLS, Conf.ConfQUIC)
@@ -42,7 +42,6 @@ func Listen(network, addr string, Conf ConfOption) (Listener, error) {
 		}
 		return newQUICListener(l), nil
 	default:
-		return nil, errors.New("unsupported network protocol: " + network)
+		return nil, net.UnknownNetworkError(network)
 	}
-
 }

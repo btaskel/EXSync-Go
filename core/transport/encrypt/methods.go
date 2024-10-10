@@ -11,7 +11,8 @@ func newAESGCM(key []byte) (*cipher.AEAD, error) {
 	if err != nil {
 		return nil, err
 	}
-	aead, err := cipher.NewGCM(c)
+	var aead cipher.AEAD
+	aead, err = cipher.NewGCM(c)
 	if err != nil {
 		return nil, err
 	}

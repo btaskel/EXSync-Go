@@ -19,7 +19,7 @@ func Dial(ctx context.Context, network, addr string, Conf ConfOption) (Conn, err
 			}
 			var twc *TCPConn
 			twc, err = NewTCPConn(conn, tcpConnOption{
-				Compressor: "lz4",
+				Compressor: Conf.CompressorMethod,
 			})
 			return twc, err
 
@@ -30,12 +30,10 @@ func Dial(ctx context.Context, network, addr string, Conf ConfOption) (Conn, err
 			}
 			var twc *TCPConn
 			twc, err = NewTCPConn(conn, tcpConnOption{
-				AEADMethod: Conf.AEADMethod,
-				Compressor: Conf.CompressorMethod,
+				AEADMethod:   Conf.AEADMethod,
+				AEADPassword: Conf.AEADPassword,
+				Compressor:   Conf.CompressorMethod,
 			})
-			if err != nil {
-				return nil, err
-			}
 			return twc, nil
 		}
 
@@ -47,6 +45,6 @@ func Dial(ctx context.Context, network, addr string, Conf ConfOption) (Conn, err
 		return newQUICConn(conn), nil
 
 	default:
-		return nil, nil
+		return nil, net.UnknownNetworkError(network)
 	}
 }

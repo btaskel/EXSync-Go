@@ -35,7 +35,7 @@ func (c *QUICConn) AcceptStream(ctx context.Context) (Stream, error) {
 	if err != nil {
 		return nil, err
 	}
-	return stream, nil
+	return newQUICStream(stream, c.LocalAddr(), c.RemoteAddr()), nil
 }
 
 func (c *QUICConn) OpenStreamSync(ctx context.Context) (Stream, error) {
@@ -43,7 +43,7 @@ func (c *QUICConn) OpenStreamSync(ctx context.Context) (Stream, error) {
 	if err != nil {
 		return nil, err
 	}
-	return stream, nil
+	return newQUICStream(stream, c.LocalAddr(), c.RemoteAddr()), nil
 }
 
 func (c *QUICConn) OpenStream() (Stream, error) {

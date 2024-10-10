@@ -1,6 +1,8 @@
 package compress
 
-import "github.com/pierrec/lz4"
+import (
+	"github.com/pierrec/lz4"
+)
 
 type Lz4Compress struct {
 	srcSize int

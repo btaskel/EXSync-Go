@@ -21,6 +21,11 @@ func newQUICStream(stream quic.Stream, localAddr, remoteAddr net.Addr) *QUICStre
 func (c *QUICStream) LocalAddr() net.Addr {
 	return c.localAddr
 }
+
 func (c *QUICStream) RemoteAddr() net.Addr {
 	return c.remoteAddr
+}
+
+func (c *QUICStream) GetBuf() ([]byte, int) {
+	return make([]byte, SocketLen), 0
 }

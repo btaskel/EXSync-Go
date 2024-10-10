@@ -6,14 +6,21 @@ import (
 )
 
 const (
-	Lz4 = "lz4"
+	Lz4  = "lz4" // Best
+	Gzip = "gzip"
+)
+
+var (
+	// ErrUnsupportedCompressionMethod 不受支持的压缩算法
+	ErrUnsupportedCompressionMethod = errors.New("unsupported compression method")
 )
 
 var methodMap = map[string]struct {
 	lossLen     int
 	newCompress func(compressLen int) Compress
 }{
-	Lz4: {lossLen: 1, newCompress: newLz4},
+	Lz4:  {lossLen: 1, newCompress: newLz4},
+	Gzip: {lossLen: 1},
 }
 
 type Compress interface {
@@ -28,5 +35,5 @@ func NewCompress(method string, compressLen int) (Compress, int, error) {
 
 		return compressMethod.newCompress(compressLen), compressMethod.lossLen, nil
 	}
-	return nil, 0, errors.New("unsupported compression method")
+	return nil, 0, ErrUnsupportedCompressionMethod
 }

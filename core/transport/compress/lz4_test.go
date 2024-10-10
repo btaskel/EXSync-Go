@@ -7,28 +7,41 @@ import (
 )
 
 func TestLZ4(t *testing.T) {
-	//lz := newLz4(4096)
 	originText := []byte{51, 52, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 50, 51}
-	//originText := make([]byte, 4096)
-	//n, err := rand.Read(originText)
-	//if err != nil {
-	//	return
-	//}
-	//originText = originText[:n]
-
-	fmt.Println(originText, len(originText))
-	out := make([]byte, 4096)
-	block, err := lz4.CompressBlock(originText, out, nil)
+	output := make([]byte, 4096)
+	n, err := lz4.CompressBlock(originText, output[4:], nil)
 	if err != nil {
 		return
 	}
-	fmt.Println(originText[:block], block)
+	fmt.Println("lz4-compressData", originText[:n], n)
 
-	dst := make([]byte, lz4.CompressBlockBound(block))
-	n, err := lz4.UncompressBlock(out[0:block], dst)
+	dst := make([]byte, lz4.CompressBlockBound(n))
+	n, err = lz4.UncompressBlock(output[:n], dst)
 	if err != nil {
 		return
 	}
 	fmt.Println(dst[:n], len(dst[:n]))
+}
 
+// TestNewCompress lz4
+func TestNewCompress(t *testing.T) {
+	compress, n, err := NewCompress("lz4", 4090)
+	if err != nil {
+		return
+	}
+	originText := "测试文字"
+	compressSlice := make([]byte, 4096)
+	n, err = compress.CompressData([]byte(originText), compressSlice)
+	if err != nil {
+		return
+	}
+	fmt.Println("compressData: ", compressSlice[:n], n)
+
+	unCompressSlice := make([]byte, 4096)
+	n, err = compress.UnCompressData(compressSlice[:n], unCompressSlice)
+	if err != nil {
+		return
+	}
+	fmt.Println("uncompressedData: ", unCompressSlice[:n], n)
+	fmt.Println("uncompressedData-string: ", string(unCompressSlice[:n]), n)
 }
