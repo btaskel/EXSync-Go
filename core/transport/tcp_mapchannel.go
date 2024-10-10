@@ -36,7 +36,7 @@ func (c *MapChannel) HasKey(mark M.Mark) (ok bool) {
 func (c *MapChannel) CreateRecv(mark M.Mark) (err error) {
 	if !c.HasKey(mark) {
 		// 创建一个有128队列的4096字节的网络接收缓冲区
-		c.mapChan[mark] = M.NewMuxBuf(128, 4090)
+		c.mapChan[mark] = M.NewMuxBuf(128, 4096)
 		return nil
 	}
 	return M.ErrMarkExist
