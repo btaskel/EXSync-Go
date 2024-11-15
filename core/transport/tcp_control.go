@@ -351,10 +351,10 @@ func (c *TCPConn) tcpStreamRecv() {
 		compressDstBuf []byte
 
 		dataLenBuf = make([]byte, 2)
-		srcBuf     = make([]byte, SocketLen)
-		dstBuf     = make([]byte, SocketLen)
+		srcBuf     = make([]byte, socketLen)
+		dstBuf     = make([]byte, socketLen)
 
-		cipherLoss = uint16(c.cipher.Info.GetLossLen())
+		cipherLoss = getCipherLoss(c.cipher)
 	)
 
 	if c.compressor != nil {
@@ -376,7 +376,7 @@ func (c *TCPConn) tcpStreamRecv() {
 
 		dataLen = binary.BigEndian.Uint16(dataLenBuf)
 
-		if dataLen == 0 || dataLen > SocketLen {
+		if dataLen == 0 || dataLen > socketLen {
 			continue
 		}
 

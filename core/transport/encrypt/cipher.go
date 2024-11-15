@@ -16,6 +16,10 @@ const (
 	Chacha20IetfPoly1305  = "chacha20-ietf-poly1305"
 )
 
+var (
+	ErrEmptyPassword = errors.New("ErrEmptyPassword")
+)
+
 type cipherInfo struct {
 	keyLen  int
 	ivLen   int
@@ -47,10 +51,6 @@ type Cipher struct {
 	dec  *cipher.AEAD
 	Info *cipherInfo
 }
-
-var (
-	ErrEmptyPassword = errors.New("ErrEmptyPassword")
-)
 
 // NewCipher 创建加/解密器
 func NewCipher(method, password string) (c *Cipher, err error) {
@@ -105,26 +105,6 @@ func (c *Cipher) InitDecrypt() (err error) {
 	return
 }
 
-//func (c *Cipher) Encrypt(plaintext, ciphertext *[]byte) error {
-//	if _, err := rand.Read((*ciphertext)[2 : c.Info.ivLen+2]); err != nil {
-//		return err
-//	}
-//	copy((*ciphertext)[2+c.Info.ivLen:], (*c.enc).Seal(nil, (*ciphertext)[2:c.Info.ivLen+2],
-//		(*plaintext)[2+c.Info.lossLen:], nil))
-//	return nil
-//}
-//
-//func (c *Cipher) Decrypt(ciphertext, plaintext *[]byte) error {
-//	nonce := (*ciphertext)[2 : c.Info.ivLen+2]
-//	encrypted := (*ciphertext)[c.Info.ivLen+2:]
-//	pt, err := (*c.dec).Open(nil, nonce, encrypted, nil)
-//	if err != nil {
-//		return err
-//	}
-//	copy((*plaintext)[c.Info.lossLen+2:], pt)
-//	return nil
-//}
-
 // Encrypt 接受所有未加密数据，从加密损耗处开始将后续所有数据进行加密，同时会填补nonce与tag
 func (c *Cipher) Encrypt(src, dst []byte) error {
 	if _, err := rand.Read(dst[2 : c.Info.ivLen+2]); err != nil {
@@ -133,17 +113,6 @@ func (c *Cipher) Encrypt(src, dst []byte) error {
 	(*c.enc).Seal(dst[:c.Info.ivLen+2], dst[2:c.Info.ivLen+2], src[2+c.Info.lossLen:], nil)
 	return nil
 }
-
-//func (c *Cipher) EncryptN(dst []byte) error {
-//	if _, err := rand.Read(dst[2 : c.Info.ivLen+2]); err != nil {
-//		return err
-//	}
-//
-//	(*c.enc).Seal(dst[:c.Info.ivLen+2], dst[2:c.Info.ivLen+2], dst[2+c.Info.lossLen:], nil)
-//	fmt.Println(len(dst), cap(dst))
-//
-//	return nil
-//}
 
 // Decrypt 接受所有已加密数据，会自动分割IV与TAG
 func (c *Cipher) Decrypt(src, dst []byte) error {
@@ -155,16 +124,3 @@ func (c *Cipher) Decrypt(src, dst []byte) error {
 
 	return nil
 }
-
-//func (c *Cipher) DecryptN(dst []byte) error {
-//	fmt.Println("DN: ", len(dst), cap(dst))
-//	fmt.Println("nonce: ", dst[2:c.Info.ivLen+2])
-//	fmt.Println("text: ", dst[2+c.Info.ivLen:])
-//
-//	_, err := (*c.dec).Open(dst[:c.Info.lossLen+2], dst[2:2+c.Info.ivLen], dst[2+c.Info.ivLen:], nil)
-//	if err != nil {
-//		return err
-//	}
-//	fmt.Println("DN", len(dst), cap(dst))
-//	return nil
-//}

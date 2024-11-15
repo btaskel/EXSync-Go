@@ -10,7 +10,7 @@ import (
 // TestNewTimeChannel pass
 func TestNewTimeChannel(t *testing.T) {
 	mark := muxbuf.Mark{0, 0, 0, 1}
-	tc := NewTimeChannel()
+	tc := NewTimeChannel(4090)
 	defer tc.Close(io.EOF)
 	err := tc.CreateRecv(mark)
 	if err != nil {
@@ -41,10 +41,4 @@ func TestNewTimeChannel(t *testing.T) {
 		return
 	}
 	fmt.Println(buf2[:n])
-}
-
-func TestNewTCPConn(t *testing.T) {
-	var p *[]byte
-	p = nil
-	fmt.Println(p)
 }

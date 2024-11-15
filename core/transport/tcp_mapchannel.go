@@ -7,16 +7,17 @@ import (
 )
 
 type MapChannel struct {
-	mapChan    map[M.Mark]*M.MuxBuf
-	lock       sync.Mutex
-	err        error
-	popDataLen int
+	mapChan map[M.Mark]*M.MuxBuf
+	lock    sync.Mutex
+	err     error
+	bufLen  int
 }
 
 // NewTimeChannel 创建一个数据接收队列, 每个队列默认最大使用1MB内存
-func NewTimeChannel() *MapChannel {
+func NewTimeChannel(bufLen int) *MapChannel {
 	return &MapChannel{
 		mapChan: make(map[M.Mark]*M.MuxBuf, 32),
+		bufLen:  bufLen,
 	}
 }
 
@@ -35,8 +36,8 @@ func (c *MapChannel) HasKey(mark M.Mark) (ok bool) {
 // CreateRecv 创建一个数据流接收队列
 func (c *MapChannel) CreateRecv(mark M.Mark) (err error) {
 	if !c.HasKey(mark) {
-		// 创建一个有128队列的4096字节的网络接收缓冲区
-		c.mapChan[mark] = M.NewMuxBuf(128, 4096)
+		// 创建一个有128队列的数据部分大小的网络接收缓冲区
+		c.mapChan[mark] = M.NewMuxBuf(128, c.bufLen)
 		return nil
 	}
 	return M.ErrMarkExist

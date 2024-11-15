@@ -27,5 +27,5 @@ func (c *QUICStream) RemoteAddr() net.Addr {
 }
 
 func (c *QUICStream) GetBuf() ([]byte, int) {
-	return make([]byte, SocketLen), 0
+	return make([]byte, socketLen), 0
 }

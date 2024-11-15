@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"github.com/quic-go/quic-go"
+	"net"
 )
 
 func newQUICListener(listener *quic.Listener) *QUICListener {
@@ -52,6 +53,14 @@ func (c *QUICConn) OpenStream() (Stream, error) {
 		return nil, err
 	}
 	return newQUICStream(stream, c.LocalAddr(), c.RemoteAddr()), nil
+}
+
+func (c *QUICConn) LocalAddr() net.Addr {
+	return c.Connection.LocalAddr()
+}
+
+func (c *QUICConn) RemoteAddr() net.Addr {
+	return c.Connection.RemoteAddr()
 }
 
 func (c *QUICConn) Close() error {

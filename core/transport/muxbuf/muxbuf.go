@@ -33,7 +33,7 @@ type MuxBuf struct {
 func NewMuxBuf(bufChanLen, bufLen int) *MuxBuf {
 	bufChan := make(chan *[]byte, bufChanLen)
 	for i := 0; i < bufChanLen; i++ {
-		slice := make([]byte, 4090, bufLen)
+		slice := make([]byte, bufLen)
 		bufChan <- &slice
 
 	}

@@ -2,15 +2,26 @@ package transport
 
 import (
 	"context"
+	"net"
 )
+
+type Listener interface {
+	Addr() net.Addr
+	Close() error
+	Accept(ctx context.Context) (Conn, error)
+}
 
 type Conn interface {
 	AcceptStream(context.Context) (Stream, error)
 	// OpenStream 打开一个流，如果等待超时则返回EOF
 	OpenStream() (Stream, error)
-	// OpenStreamSync 打开
+	// OpenStreamSync -
 	OpenStreamSync(context.Context) (Stream, error)
-
+	// LocalAddr returns the local address.
+	LocalAddr() net.Addr
+	// RemoteAddr returns the address of the peer.
+	RemoteAddr() net.Addr
+	// Close 关闭当前连接以及所有流
 	Close() error
 }
 
