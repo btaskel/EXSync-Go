@@ -1,48 +1,46 @@
 package transport
 
 import (
-	logger "EXSync/core/log"
 	"EXSync/core/transport/compress"
 	"EXSync/core/transport/encrypt"
+	logger "EXSync/core/transport/logging"
 	M "EXSync/core/transport/muxbuf"
 	"context"
+	"crypto/tls"
+	"errors"
 	"fmt"
-	"io"
+	"github.com/quic-go/quic-go"
 	"net"
+	"runtime"
 	"sync"
 )
 
-func newTCPListener(listener net.Listener, aeadMethod, aeadPassword, compressorMethod string, tlsEnable bool) *TCPListener {
-	return &TCPListener{listener, aeadMethod, aeadPassword, compressorMethod, tlsEnable}
-}
-
-type tcpWithCipher struct {
+type TCPConn struct {
 	// obj
-	conn       net.Conn
-	tlsEnable  bool
+	conn       *net.TCPConn
 	compressor compress.Compress
 	cipher     *encrypt.Cipher
 	mc         *MapChannel
+	muxWriter  *muxWriter
+
+	ctx context.Context
 
 	taskMap           map[M.Mark]struct{} // streamID set
 	streamOffsetMutex sync.Mutex
-	streamOffset      uint32
-	rejectNumMutex    sync.Mutex
-	rejectNum         uint32 // stream reject counter
-	maxRejectNum      uint32 // Maximum allowed rejected connections per minute
+	streamOffset      uint64
+	rejectNum         uint64 // stream reject counter
+	maxRejectNum      uint64 // Maximum allowed rejected connections per minute
 
 	// attr
 	socketDataLen  int
 	compressorLoss int
-	err            error
-}
+	dataGramStream quic.Stream
 
-// getSocketSlice 初始化一个切片，并返回数据写入索引的位置
-func (c *tcpWithCipher) getSocketSlice() ([]byte, int) {
-	transportLoss := streamDataLen + streamIDLen // 传输层损耗
-	cipherLoss := getCipherLoss(c.cipher)        // 加密损耗
-	compressorLoss := c.compressorLoss           // 压缩损耗
-	return make([]byte, socketLen), transportLoss + cipherLoss + compressorLoss
+	applicationError *quic.ApplicationError
+	errCode          quic.ApplicationErrorCode
+	errMutex         sync.Mutex
+
+	connectionState func() tls.ConnectionState
 }
 
 type tcpConnOption struct {
@@ -52,12 +50,18 @@ type tcpConnOption struct {
 	TLSEnable    bool
 }
 
-func NewTCPConn(conn net.Conn, option tcpConnOption) (tcpConn *TCPConn, err error) {
+// newTCPConn 创建一个新的 TCPConn 实例
+// ctx 是一个 context.Context，用于控制连接的生命周期
+// conn 是一个 net.Conn，表示底层的网络连接
+// option 是一个 tcpConnOption 结构体，包含加密和压缩选项
+// 返回一个指向 TCPConn 的指针和可能的错误
+func newTCPConn(ctx context.Context, conn net.Conn, option tcpConnOption) (*TCPConn, error) {
 	var cipher *encrypt.Cipher
+	var err error
 	if option.AEADMethod != "" {
 		cipher, err = encrypt.NewCipher(option.AEADMethod, option.AEADPassword)
 		if err != nil {
-			return
+			return nil, err
 		}
 	}
 
@@ -72,12 +76,10 @@ func NewTCPConn(conn net.Conn, option tcpConnOption) (tcpConn *TCPConn, err erro
 
 	socketDataLen := socketLen - (n + getCipherLoss(cipher) + streamIDLen)
 
-	tcpConn = new(TCPConn)
-
-	tcpConn.tcpWithCipher = &tcpWithCipher{
-		conn:       conn,
-		tlsEnable:  option.TLSEnable,
-		mc:         NewTimeChannel(socketDataLen),
+	tcpConn := &TCPConn{
+		conn:       conn.(*net.TCPConn),
+		ctx:        ctx,
+		mc:         newTimeChannel(socketDataLen),
 		cipher:     cipher,
 		compressor: compressor,
 
@@ -86,112 +88,177 @@ func NewTCPConn(conn net.Conn, option tcpConnOption) (tcpConn *TCPConn, err erro
 
 		socketDataLen:  socketDataLen,
 		compressorLoss: n,
+		maxRejectNum:   32,
+
+		errMutex: sync.Mutex{},
 	}
 
-	tcpConn.writeBuf = make([]byte, socketLen)
-
-	go tcpConn.tcpStreamRecv()
-
-	tcpConn.err = tcpConn.mc.CreateRecv(defaultControlStream)
-	if tcpConn.err != nil {
-		logger.Fatalf("Transport-TCP-initDefaultStream: %s", tcpConn.err)
-		return
-	}
+	tcpConn.pre()
 
 	return tcpConn, nil
 }
 
-type TCPConn struct {
-	*tcpWithCipher
-	writeBuf []byte
-}
+func (s *TCPConn) pre() {
+	// 启动muxWriter
+	s.muxWriter = newMuxWriter(runtime.NumCPU(), s)
 
-func (c *TCPConn) AcceptStream(ctx context.Context) (Stream, error) {
-	_ = ctx
-	return c.getControlStreamByte(make([]byte, c.socketDataLen))
-}
-
-func (c *TCPConn) OpenStreamSync(ctx context.Context) (Stream, error) {
-	return c.getStream(ctx, -1)
-}
-
-func (c *TCPConn) OpenStream() (Stream, error) {
-	return c.getStream(context.Background(), 5)
-}
-
-func (c *TCPConn) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
-}
-
-func (c *TCPConn) LocalAddr() net.Addr {
-	return c.conn.LocalAddr()
-}
-
-// Close 释放TCPWithCipher
-func (c *TCPConn) Close() error {
-	c.mc.Close(net.ErrClosed)
-	err := c.conn.Close()
+	err := s.mc.createRecv(defaultControlStream)
 	if err != nil {
+		logger.Fatalf("connect-newTCPConn-createRecv: %s", err)
+		return
+	}
+
+	go s.tcpStreamRecv()
+}
+
+func (s *TCPConn) AcceptUniStream(ctx context.Context) (quic.ReceiveStream, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *TCPConn) OpenUniStream() (quic.SendStream, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *TCPConn) OpenUniStreamSync(ctx context.Context) (quic.SendStream, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+// SendDatagram 与 quic.Stream 的 SendDatagram 方法实现不同,
+// 它是可靠的传输, 且受AEAD与压缩、或TLS影响, 本质上是一个 Stream
+func (s *TCPConn) SendDatagram(payload []byte) error {
+	var err error
+	if err = s.supportsDatagrams(); err != nil {
 		return err
+	}
+	_, err = s.dataGramStream.Write(payload)
+	return err
+}
+
+func (s *TCPConn) ReceiveDatagram(ctx context.Context) ([]byte, error) {
+	var n int
+	var err error
+	if err = s.supportsDatagrams(); err != nil {
+		return nil, err
+	}
+	buf := make([]byte, socketLen)
+
+	n, err = s.dataGramStream.Read(buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf[:n], nil
+}
+
+func (s *TCPConn) supportsDatagrams() error {
+	if s.dataGramStream == nil {
+		return errors.New("datagram support disabled")
 	}
 	return nil
 }
 
-// Write
-func (c *TCPConn) Write(b []byte) (int, error) {
-	if len(b) <= streamDataLen+getCipherLoss(c.cipher)+streamIDLen {
-		return 0, io.ErrShortBuffer
-	}
-
-	compressorWriteIndex := streamDataLen + getCipherLoss(c.cipher)
-	//cipherWriteIndex := streamDataLen
-	fmt.Println("tcp-write-origin:", b)
-	var n int // 切片终点索引
-	var srcp, dstp *[]byte
-	if c.compressor == nil {
-		n = len(b)
-		srcp = &b
-		dstp = &c.writeBuf
-	} else {
-		fmt.Println("pre-CompressData: ", b[compressorWriteIndex+c.compressorLoss:])
-		n, c.err = c.compressor.CompressData(b[compressorWriteIndex+c.compressorLoss:], c.writeBuf[compressorWriteIndex:])
-		if c.err != nil {
-			return 0, c.err
-		}
-		fmt.Println("tcp-written", c.writeBuf)
-		if n == 0 {
-			// 没有压缩成功, 则使用压缩前的索引
-			n = len(b)
-			srcp = &c.writeBuf
-			dstp = &b
-		}
-		n = n + compressorWriteIndex
-		srcp = &c.writeBuf
-		dstp = &b
-	}
-	fmt.Println("Compressed:", *srcp)
-	if c.cipher != nil {
-		c.err = c.cipher.Encrypt((*srcp)[:n], *dstp)
-		if c.err != nil {
-			return 0, c.err
-		}
-		srcp = dstp
-	}
-
-	(*srcp)[0] = byte(((n) >> 8) & 255)
-	(*srcp)[1] = byte((n) & 255)
-	fmt.Println("tcp-write-all:", *srcp)
-	fmt.Println("tcp-write:", (*srcp)[:n])
-	n, c.err = c.conn.Write((*srcp)[:n])
-	if c.err != nil {
-		return 0, c.err
-	}
-	return n, nil
+func (s *TCPConn) Context() context.Context {
+	return s.ctx
 }
 
-// writeStream 将切片b写入到指定的流ID中
-func (c *TCPConn) writeStream(b []byte, mark M.Mark) (int, error) {
-	fmt.Println("b[streamDataLen+c.cipher.Info.GetLossLen()+c.compressorLoss:]", b)
-	M.CopyMarkToSlice(b[streamDataLen+getCipherLoss(c.cipher)+c.compressorLoss:], mark)
-	return c.Write(b)
+func (s *TCPConn) ConnectionState() quic.ConnectionState {
+	cs := quic.ConnectionState{}
+	if s.connectionState != nil {
+		cs.TLS = s.connectionState()
+	}
+	return cs
+}
+
+func (s *TCPConn) AcceptStream(ctx context.Context) (quic.Stream, error) {
+	return s.getControlStreamByte(ctx, make([]byte, streamControlLength))
+}
+
+func (s *TCPConn) OpenStreamSync(ctx context.Context) (quic.Stream, error) {
+	return s.getStream(ctx, -1)
+}
+
+func (s *TCPConn) OpenStream() (quic.Stream, error) {
+	return s.getStream(s.ctx, 5)
+}
+
+func (s *TCPConn) RemoteAddr() net.Addr { return s.conn.RemoteAddr() }
+
+func (s *TCPConn) LocalAddr() net.Addr { return s.conn.LocalAddr() }
+
+func (s *TCPConn) CloseWithError(code quic.ApplicationErrorCode, desc string) error {
+	err := s.closeLocal(code, desc)
+	if err != nil {
+		return err
+	}
+
+	err = s.closeRemote(code, desc)
+	if err != nil {
+		return err
+	}
+
+	err = s.conn.Close()
+	if err != nil {
+		return err
+	}
+
+	//<-s.ctx.Done()
+	return nil
+}
+
+// closeLocal 携带错误代码和描述, 关闭本地套接字
+func (s *TCPConn) closeLocal(code quic.ApplicationErrorCode, desc string) error {
+	s.errMutex.Lock()
+	defer s.errMutex.Unlock()
+	if s.applicationError != nil {
+		return errors.New(s.applicationError.ErrorMessage)
+	}
+	logger.Infof("closeLocal-host address: %s", s.conn.LocalAddr().String())
+	s.applicationError = new(quic.ApplicationError)
+	s.applicationError.ErrorCode = code
+	s.applicationError.ErrorMessage = desc
+	s.muxWriter.Close()
+	s.mc.close()
+	return nil
+}
+
+// closeRemote 携带错误代码和描述, 关闭远程套接字
+func (s *TCPConn) closeRemote(code quic.ApplicationErrorCode, desc string) error {
+	if code == 0 {
+		logger.Info("Closing connection.")
+	} else {
+		logger.Errorf("Closing connection with error: %s", desc)
+	}
+	logger.Infof("Peer closed connection with error: %s", desc)
+
+	scp, n := createStreamControlProto(streamControlProtocol{
+		TypeFlag:       scpTypeFlagConn,
+		BeforeStreamID: 0,
+		AfterStreamID:  M.Mark(code),
+		AckFlag:        0,
+		ExtStr:         desc,
+	})
+	var err error
+	_, err = s.writeStream(scp[:n], defaultControlStream)
+	return err
+}
+
+// writeStream 将切片p写入到指定的流ID中
+// p 是一个字节切片，表示要写入的数据
+// mark 是一个 M.Mark 类型，表示目标流ID
+// 返回写入的字节数和可能的错误
+func (s *TCPConn) writeStream(p []byte, mark M.Mark) (int, error) {
+	logger.Debug("connect-writeStream-p: ", p)
+	fmt.Println("writer num", s.muxWriter.check())
+	n, err := s.muxWriter.write(mark, p)
+	if err != nil {
+		if opErr, ok := err.(*net.OpError); ok && opErr.Err == net.ErrClosed {
+			if s.applicationError != nil {
+				return 0, errors.New(s.applicationError.Error())
+			}
+		}
+		return 0, err
+	}
+	return n, nil
 }

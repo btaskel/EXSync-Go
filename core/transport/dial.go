@@ -4,26 +4,45 @@ import (
 	"context"
 	"crypto/tls"
 	"github.com/quic-go/quic-go"
-	"golang.org/x/net/proxy"
 	"net"
 	"strings"
 )
 
+// ConfOption
+// 启用 TCP over TLS 时, ConfTLS 不能为 nil,
+// 启用 QUIC 时, ConfQUIC 与 ConfTLS 不能为 nil,
+// 启用 TCP over AEAD 时, AEADMethod AEADPassword 不能为空
+type ConfOption struct {
+	// ConfTLS TLS配置, 无论是否使用AEAD都将进行TLS加密,
+	// 因此理想情况下应该在TLS启用时, 不使用AEAD
+	ConfTLS *tls.Config
+	// ConfQUIC QUIC配置
+	ConfQUIC *quic.Config
+	// AEADMethod AEAD加密方式,
+	// 例如 encrypt.Aes128Gcm, encrypt.Xchacha20IetfPoly1305 ...
+	AEADMethod string
+	// AEADPassword AEAD 密钥,
+	// 不限制密钥长度, 最终会哈希为加密方式所需要的密钥长度
+	AEADPassword string
+	// CompressorMethod 压缩方式, 例如: compress.Lz4
+	CompressorMethod string
+}
+
 // DialAddr Client DialAddr
-func DialAddr(ctx context.Context, network, addr string, conf *ConfOption) (Conn, error) {
+func DialAddr(ctx context.Context, network, addr string, conf *ConfOption) (quic.Connection, error) {
 	switch strings.ToLower(network) {
 	case "tcp":
 		if conf.ConfTLS != nil {
-			_ = ctx
 			conn, err := tls.Dial(network, addr, conf.ConfTLS)
 			if err != nil {
 				return nil, err
 			}
 			var twc *TCPConn
-			twc, err = NewTCPConn(conn, tcpConnOption{
+			twc, err = newTCPConn(ctx, conn, tcpConnOption{
 				Compressor: conf.CompressorMethod,
 				TLSEnable:  true,
 			})
+			twc.connectionState = conn.ConnectionState
 			return twc, err
 		} else {
 			conn, err := net.Dial(network, addr)
@@ -31,7 +50,7 @@ func DialAddr(ctx context.Context, network, addr string, conf *ConfOption) (Conn
 				return nil, err
 			}
 			var twc *TCPConn
-			twc, err = NewTCPConn(conn, tcpConnOption{
+			twc, err = newTCPConn(ctx, conn, tcpConnOption{
 				AEADMethod:   conf.AEADMethod,
 				AEADPassword: conf.AEADPassword,
 				Compressor:   conf.CompressorMethod,
@@ -54,8 +73,8 @@ func DialAddr(ctx context.Context, network, addr string, conf *ConfOption) (Conn
 	}
 }
 
-// DialTCP 它接受一个 net.Conn 并将其包装为 transport.Conn 接口
-func DialTCP(ctx context.Context, c net.Conn, conf *ConfOption) (Conn, error) {
+// DialTCP 它接受一个 net.Conn 并将其包装为 quic.Connection 接口
+func DialTCP(ctx context.Context, c net.Conn, conf *ConfOption) (quic.Connection, error) {
 	if conf.ConfTLS != nil {
 		conn := tls.Client(c, conf.ConfTLS)
 		err := conn.HandshakeContext(ctx)
@@ -63,13 +82,13 @@ func DialTCP(ctx context.Context, c net.Conn, conf *ConfOption) (Conn, error) {
 			return nil, err
 		}
 		var twc *TCPConn
-		twc, err = NewTCPConn(conn, tcpConnOption{
+		twc, err = newTCPConn(ctx, conn, tcpConnOption{
 			Compressor: conf.CompressorMethod,
 			TLSEnable:  true,
 		})
 		return twc, err
 	} else {
-		twc, err := NewTCPConn(c, tcpConnOption{
+		twc, err := newTCPConn(ctx, c, tcpConnOption{
 			AEADMethod:   conf.AEADMethod,
 			AEADPassword: conf.AEADPassword,
 			Compressor:   conf.CompressorMethod,
@@ -79,66 +98,6 @@ func DialTCP(ctx context.Context, c net.Conn, conf *ConfOption) (Conn, error) {
 		}
 		return twc, nil
 	}
-}
-
-//func tlsWithProxyDial(ctx context.Context, network, addr string, Conf *ConfOption) (Conn, error) {
-//	var conn net.Conn
-//	var err error
-//	var dialer proxy.Dialer
-//	dialer, err = proxy.SOCKS5("tcp", Conf.ProxyAddr, Conf.ProxyAuth, proxy.Direct)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	conn, err = tls.DialWithDialer(&net.Dialer{
-//		Timeout:   10 * time.Second, // 设置拨号超时时间
-//		KeepAlive: 10 * time.Second,
-//		Control: func(_, addr string, c syscall.RawConn) error {
-//			_, err = dialer.(proxy.ContextDialer).DialContext(ctx, "tcp", addr)
-//			if err != nil {
-//				return err
-//			}
-//			return err
-//		},
-//	}, network, addr, Conf.ConfTLS)
-//
-//	if err != nil {
-//		return nil, err
-//	}
-//	var twc *TCPConn
-//	twc, err = NewTCPConn(conn, tcpConnOption{
-//		Compressor: Conf.CompressorMethod,
-//	})
-//	return twc, err
-//
-//}
-//
-//func tlsDial(ctx context.Context, network, addr string, Conf *ConfOption) (Conn, error) {
-//	_ = ctx
-//	conn, err := tls.Dial(network, addr, Conf.ConfTLS)
-//	if err != nil {
-//		return nil, err
-//	}
-//	var twc *TCPConn
-//	twc, err = NewTCPConn(conn, tcpConnOption{
-//		Compressor: Conf.CompressorMethod,
-//	})
-//	return twc, err
-//}
-
-// ConfOption 优先级顺序:
-type ConfOption struct {
-	// ConfTLS TLS配置, 并开启TCP,无论是否开启AEAD都将使用tls加密
-	ConfTLS *tls.Config
-	// ConfQUIC Quic配置
-	ConfQUIC *quic.Config
-
-	AEADMethod       string
-	AEADPassword     string
-	CompressorMethod string
-
-	ProxyAddr string
-	ProxyAuth *proxy.Auth
 }
 
 // Listen TCP, TCP over TLS, QUIC Listener

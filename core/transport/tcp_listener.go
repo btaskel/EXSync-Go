@@ -2,8 +2,13 @@ package transport
 
 import (
 	"context"
+	"github.com/quic-go/quic-go"
 	"net"
 )
+
+func newTCPListener(listener net.Listener, aeadMethod, aeadPassword, compressorMethod string, tlsEnable bool) *TCPListener {
+	return &TCPListener{listener, aeadMethod, aeadPassword, compressorMethod, tlsEnable}
+}
 
 type TCPListener struct {
 	net.Listener
@@ -13,14 +18,13 @@ type TCPListener struct {
 	tlsEnable        bool
 }
 
-func (c *TCPListener) Accept(ctx context.Context) (Conn, error) {
-	_ = ctx
+func (c *TCPListener) Accept(ctx context.Context) (quic.Connection, error) {
 	conn, err := c.Listener.Accept()
 	if err != nil {
 		return nil, err
 	}
 
-	return NewTCPConn(conn, tcpConnOption{
+	return newTCPConn(ctx, conn, tcpConnOption{
 		AEADMethod:   c.aeadMethod,
 		AEADPassword: c.aeadPassword,
 		Compressor:   c.compressorMethod,

@@ -1,16 +1,15 @@
 package muxbuf
 
 import (
+	"encoding/binary"
 	"fmt"
 	"testing"
 )
 
-func TestPutUint32(t *testing.T) {
-	arr := PutUint32(32)
-	fmt.Println(arr)
-}
-
-func TestMarkToUint32(t *testing.T) {
-	arr := PutUint32(32)
-	fmt.Println(MarkToUint32(arr))
+func TestCopyMarkToSlice(t *testing.T) {
+	var uint64v uint64 = 99999999999999
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64v)
+	//CopyMarkToSlice(buf, uint64v)
+	fmt.Println(buf)
 }

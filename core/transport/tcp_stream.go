@@ -3,8 +3,20 @@ package transport
 import (
 	M "EXSync/core/transport/muxbuf"
 	"errors"
+	"github.com/quic-go/quic-go"
 	"net"
+	"os"
+	"time"
 )
+
+type deadlineError struct{}
+
+func (deadlineError) Error() string   { return "deadline exceeded" }
+func (deadlineError) Temporary() bool { return true }
+func (deadlineError) Timeout() bool   { return true }
+func (deadlineError) Unwrap() error   { return os.ErrDeadlineExceeded }
+
+var errDeadline net.Error = new(deadlineError)
 
 const (
 	// socketLen 网络套接字发送缓冲区大小
@@ -12,88 +24,51 @@ const (
 	// streamDataLen 数据切片长度占用大小
 	streamDataLen = 2
 	// streamIDLen 流ID在数据切片中占用的大小
-	streamIDLen = 4
+	streamIDLen = M.MarkLen
 )
 
 var (
-	// defaultControlStream: create Stream and delete Stream
-	// delete-flag, beforeStreamID, afterStreamID, reply-flag
-	// format: {0/1 (delete-flag) ,0-255, 0-255, 0-255, 1-255, 0-255, 0-255, 0-255, 1-255, 0/1 (reply-flag) }
-	defaultControlStream = M.Mark{0, 0, 0, 1}
-)
-
-var (
-	// ErrStreamClosed 流已关闭
-	ErrStreamClosed = errors.New("stream closed")
 	// ErrNonStreamControlProtocol 非控制流协议错误
 	ErrNonStreamControlProtocol = errors.New("non-stream control protocol")
 	// ErrStreamReject 控制流拒绝错误
 	ErrStreamReject = errors.New("stream reject error")
 )
 
-type TCPStream struct {
-	*tcpWithCipher
-	streamID M.Mark
-
-	compressorBuf, swapBuf       []byte
-	srcBufPointer, dstBufPointer *[]byte
-
-	tcpConnection *TCPConn
-	rn, wn        int
+func init() {
+	if socketLen < 4 || socketLen > 65535-streamDataLen {
+		panic("socketLen exceeding the index range")
+	}
 }
 
-// newTCPStream with Cipher
-// 如果streamID为空，则自动选择StreamID
-func newTCPStream(twc *tcpWithCipher, streamID M.Mark, tcpConn *TCPConn) (Stream, error) {
-	tc := &TCPStream{tcpWithCipher: twc,
-		streamID:      streamID,
-		compressorBuf: make([]byte, twc.socketDataLen),
-		tcpConnection: tcpConn,
-	}
-
-	if twc.cipher != nil {
-		tc.swapBuf = make([]byte, twc.socketDataLen)
-	}
-	return tc, nil
-}
-
-// Read Stream With Cipher
-// dataLen -> cipherText -> uncompressedText -> multiplexing -> plainText
-func (c *TCPStream) Read(b []byte) (int, error) {
+func newTCPStream(streamID M.Mark, tcpConn *TCPConn) (quic.Stream, error) {
+	ts := new(TCPStream)
 	var err error
-	c.rn, err = c.mc.PopTimeout(c.mc.mapChan[c.streamID], &b)
+	ts.ReceiveStream, err = newReceiveStream(streamID, tcpConn)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return c.rn, nil
+	ts.SendStream, err = newSendStream(streamID, tcpConn)
+	if err != nil {
+		return nil, err
+	}
+	return ts, nil
 }
 
-func (c *TCPStream) Write(b []byte) (int, error) {
-	return c.tcpConnection.writeStream(b, c.streamID)
+type TCPStream struct {
+	quic.ReceiveStream
+	quic.SendStream
 }
 
-func (c *TCPStream) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
+func (s *TCPStream) StreamID() quic.StreamID {
+	return s.SendStream.StreamID()
 }
 
-func (c *TCPStream) LocalAddr() net.Addr {
-	return c.conn.LocalAddr()
+func (s *TCPStream) Close() error {
+	return s.SendStream.Close()
 }
 
-// Close 关闭一个多路复用数据流
-func (c *TCPStream) Close() error {
-	return c.mc.Del(c.streamID)
-}
-
-func (c *TCPStream) getIVLen() int {
-	return c.cipher.Info.GetIvLen()
-}
-
-func (c *TCPStream) getKeyLen() int {
-	return c.cipher.Info.GetKeyLen()
-}
-
-// GetBuf 初始化一个切片，并返回数据写入索引的位置
-func (c *TCPStream) GetBuf() ([]byte, int) {
-	return c.getSocketSlice()
+func (s *TCPStream) SetDeadline(t time.Time) error {
+	_ = s.SendStream.SetWriteDeadline(t)
+	_ = s.ReceiveStream.SetReadDeadline(t)
+	return nil
 }

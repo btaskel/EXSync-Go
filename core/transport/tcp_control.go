@@ -1,49 +1,62 @@
 package transport
 
 import (
-	logger "EXSync/core/log"
+	logger "EXSync/core/transport/logging"
 	M "EXSync/core/transport/muxbuf"
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
+	"github.com/quic-go/quic-go"
 	"io"
+	"net"
+	"sync/atomic"
 )
 
 // streamControlLength 流控制协议长度
 // close-flag + 2 * streamID + control-flag
-const streamControlLength = 1 + 2*streamIDLen + 1
+const (
+	streamControlFlag   = 1
+	streamControlLength = streamControlFlag + 2*streamIDLen + streamControlFlag
+)
+
+const (
+	// defaultControlStream: create quic.Stream and delete quic.Stream
+	// delete-flag, beforeStreamID, afterStreamID, reply-flag
+	// format: {0/1 (type-flag) ,0-255, 0-255, 0-255, 0-255, 0-255, 0-255, 0-255, 1-255,
+	// 0-255, 0-255, 0-255, 0-255, 0-255, 0-255, 0-255, 0-255, 0/1 (reply-flag) }
+	defaultControlStream M.Mark = 1
+)
 
 var (
 	// ErrCreateStream 会在初期发送流创建协议因Write函数遇到错误而返回
 	ErrCreateStream = errors.New("create stream error")
-	// ErrCreateStreamReply 遇到远程未答复流创建协议
-	ErrCreateStreamReply = errors.New("create stream reply error")
+	// ErrRecvStreamReply 遇到远程未答复流创建协议
+	ErrRecvStreamReply = errors.New("recv stream reply error")
 )
 
 // getStream 向远程申请一个可用的流ID
 // 该操作会请求创建流协议发送到远程默认控制流, 并等待一个是否可用答复
-func (c *TCPConn) getStream(ctx context.Context, blockNum int) (Stream, error) {
+func (s *TCPConn) getStream(ctx context.Context, blockNum int) (quic.Stream, error) {
 	// 获取一个基于自身流偏移的流ID
-	beforeStreamID := c.createTCPStreamID()
-	fmt.Println("getStream-beforeStreamID: ", beforeStreamID)
+	beforeStreamID := s.createTCPStreamID()
+	logger.Debugf("control-getStream-beforeStreamID: %v", beforeStreamID)
 	// 创建流控制协议: 创建流 beforeStreamID
-	sc, n := c.createStreamControlProto(streamControlOption{
-		CloseFlag:      0,
+	scp, n := createStreamControlProto(streamControlProtocol{
+		TypeFlag:       scpTypeFlagRequest,
 		BeforeStreamID: beforeStreamID,
 		AfterStreamID:  beforeStreamID,
 		AckFlag:        1,
 	})
-	_, err := c.writeStream(sc[:n], defaultControlStream)
+	_, err := s.writeStream(scp[:n], defaultControlStream)
 	if err != nil {
 		return nil, ErrCreateStream
 	}
 
-	err = c.mc.CreateRecv(beforeStreamID)
+	err = s.mc.createRecv(beforeStreamID)
 	if err != nil {
 		return nil, err
 	}
-	defer c.mc.Del(beforeStreamID)
+	defer s.mc.del(beforeStreamID)
 
 	var (
 		mb            *M.MuxBuf
@@ -51,108 +64,63 @@ func (c *TCPConn) getStream(ctx context.Context, blockNum int) (Stream, error) {
 		acceptFlag    byte
 		ok            bool
 	)
-	counter := 0
+
 	for {
-		fmt.Println("counter:", counter)
-		counter += 1
 		select {
 		case <-ctx.Done():
-			return nil, context.DeadlineExceeded
+			return nil, context.Canceled
 		default:
-			fmt.Println("pop start", beforeStreamID)
-			mb, ok = c.mc.GetMuxBuf(beforeStreamID)
+			mb, ok = s.mc.getMuxBuf(beforeStreamID)
 			if !ok {
 				return nil, M.ErrMarkNotExist
 			}
-			n, err = c.mc.PopTimeout(mb, &sc)
+			n, err = s.mc.popTimeout(mb, &scp)
 			if err != nil {
-				return nil, ErrCreateStreamReply
+				return nil, ErrRecvStreamReply
 			}
-			fmt.Println("pop end")
 
-			fmt.Println("parseStreamControl", sc)
-			streamControl := c.parseStreamControl(sc)
+			streamControl := parseStreamControlProto(scp)
 
 			beforeStreamID = streamControl.BeforeStreamID
 			afterStreamID = streamControl.AfterStreamID
 			acceptFlag = streamControl.AckFlag
 
 			if acceptFlag == 1 {
-				var stream Stream
-				stream, err = newTCPStream(c.tcpWithCipher, afterStreamID, c)
+				var stream quic.Stream
+				stream, err = newTCPStream(afterStreamID, s)
 				if err != nil {
 					return nil, err
 				}
 				return stream, err
-			} else {
-				// 覆写请求
-				afterStreamID = c.getOffsetStream(afterStreamID)
-				M.CopyMarkToSlice(sc[n-1-2*streamIDLen:], afterStreamID)
-				_, err = c.writeStream(sc[:n], beforeStreamID)
-				if err != nil {
-					return nil, err
-				}
+			}
+			// 覆写请求
+			afterStreamID = s.getOffsetStream(afterStreamID)
+			binary.BigEndian.PutUint64(scp[n-1-2*streamIDLen:], afterStreamID)
+			//M.CopyMarkToSlice(sc[n-1-2*streamIDLen:], afterStreamID)
+			_, err = s.writeStream(scp[:n], beforeStreamID)
+			if err != nil {
+				return nil, err
+			}
 
-				if blockNum == -1 {
-					continue
-				} else {
-					blockNum++
-					if blockNum >= 5 {
-						break
-					}
+			if blockNum == -1 {
+				continue
+			} else {
+				blockNum++
+				if blockNum >= 5 {
+					break
 				}
 			}
 		}
 	}
 }
 
-type streamControlOption struct {
-	CloseFlag                     byte
-	BeforeStreamID, AfterStreamID M.Mark
-	AckFlag                       byte
-}
-
-// createStreamControlProto 创建一个流控制协议
-func (c *TCPConn) createStreamControlProto(streamControlOption streamControlOption) ([]byte, int) {
-	sc, n := c.getSocketSlice()
-
-	// closeFlag 0
-	sc[n+0] = streamControlOption.CloseFlag
-
-	// beforeStreamID 1-4
-	for i, value := range streamControlOption.BeforeStreamID {
-		sc[n+1+i] = value
-	}
-
-	// afterStreamID 5-
-	for i, value := range streamControlOption.AfterStreamID {
-		sc[n+5+i] = value
-	}
-
-	// ackFlag 9
-	sc[n+9] = streamControlOption.AckFlag
-	fmt.Println("sc:", sc)
-	return sc, n + 10
-}
-
-func (c *TCPConn) parseStreamControl(sc []byte) streamControlOption {
-	fmt.Println("parseStreamControl", sc)
-	// [0 0 0 0 0 0 0 0 2 1]
-	return streamControlOption{
-		CloseFlag:      sc[0],
-		BeforeStreamID: M.SliceToMark(sc[1:5]),
-		AfterStreamID:  M.SliceToMark(sc[5:9]),
-		AckFlag:        sc[9],
-	}
-}
-
-// closeStream 关闭指定Mark的流
-func (c *TCPConn) closeStream(closeMark M.Mark) error {
-	sc, n := c.createStreamControlProto(streamControlOption{
-		CloseFlag:      1,
+// closeStream 通知远程, 本地关闭的流
+func (s *TCPConn) closeStream(closeMark M.Mark) error {
+	sc, n := createStreamControlProto(streamControlProtocol{
+		TypeFlag:       scpTypeFlagStream,
 		BeforeStreamID: closeMark,
 	})
-	_, err := c.writeStream(sc[:n], defaultControlStream)
+	_, err := s.writeStream(sc[:n], defaultControlStream)
 	if err != nil {
 		return err
 	}
@@ -160,131 +128,141 @@ func (c *TCPConn) closeStream(closeMark M.Mark) error {
 }
 
 // createTCPStreamID 安全地获取一个未被占用的StreamID
-func (c *TCPConn) createTCPStreamID() M.Mark {
-	c.streamOffsetMutex.Lock()
-	arr := M.PutUint32(c.streamOffset)
-	for c.mc.HasKey(arr) {
-		c.streamOffset += 1
-		if c.streamOffset == ^uint32(0) { // 偏移调整归零
-			c.streamOffset = 2
+func (s *TCPConn) createTCPStreamID() M.Mark {
+	s.streamOffsetMutex.Lock()
+	for s.mc.hasKey(s.streamOffset) {
+		s.streamOffset += 1
+		if s.streamOffset == ^uint64(0) { // 偏移调整归零
+			s.streamOffset = 2
 		}
-		arr = M.PutUint32(c.streamOffset)
 	}
-	c.streamOffsetMutex.Unlock()
-	return arr
+	s.streamOffsetMutex.Unlock()
+	return s.streamOffset
 }
 
 // getOffsetStream 将原afterStreamID 根据本地与远程偏移，按顺序获取可用的流ID
-func (c *TCPConn) getOffsetStream(afterStreamID M.Mark) M.Mark {
-	remoteStreamOffset := M.MarkToUint32(afterStreamID)
-	if remoteStreamOffset > c.streamOffset {
+func (s *TCPConn) getOffsetStream(afterStreamID M.Mark) M.Mark {
+	remoteStreamOffset := afterStreamID
+	if remoteStreamOffset > s.streamOffset {
 		// 根据远程获取流偏移ID
 		remoteStreamOffset += 1
-		afterStreamID = M.PutUint32(remoteStreamOffset)
-		for c.mc.HasKey(afterStreamID) {
-			if remoteStreamOffset == ^uint32(0) {
+		afterStreamID = remoteStreamOffset
+		for s.mc.hasKey(afterStreamID) {
+			if remoteStreamOffset == ^uint64(0) {
 				remoteStreamOffset = 2
 			}
 			remoteStreamOffset += 1
-			afterStreamID = M.PutUint32(remoteStreamOffset)
+			afterStreamID = remoteStreamOffset
 		}
 	} else {
 		// 获取一个基于自身流偏移的流ID
-		streamID := c.createTCPStreamID()
-		for i := 0; i < 4; i++ {
-			afterStreamID[i] = streamID[i]
-		}
+		afterStreamID = s.createTCPStreamID()
 	}
 	return afterStreamID
 }
 
-// getControlStreamByte 阻塞并捕获控制流
-// 从MapChannel 中弹出一个流创建信息，并转交下层处理
-func (c *TCPConn) getControlStreamByte(controlStream []byte) (stream Stream, err error) {
-	// 持续接收流申请
-	fmt.Println("getControlStreamByte: ", controlStream)
-	var n int
-	fmt.Println("getControlStreamByte: enabled")
-	mb, ok := c.mc.GetMuxBuf(defaultControlStream)
+// getControlStreamByte 阻塞并直到获取到一个 quic.Stream
+func (s *TCPConn) getControlStreamByte(ctx context.Context, controlStream []byte) (stream quic.Stream, err error) {
+	logger.Debugf("control-getControlStreamByte: %v", controlStream)
+	logger.Debug("control-getControlStreamByte: enabled")
+	mb, ok := s.mc.getMuxBuf(defaultControlStream)
 	if !ok {
 		return nil, M.ErrMarkNotExist
 	}
-	n, c.err = c.mc.Pop(mb, &controlStream)
-	if c.err != nil {
-		return nil, c.err
+	var n int
+	select {
+	case <-ctx.Done():
+		logger.Debug("control-getControlStreamByte-done")
+		return nil, context.Canceled
+	default:
+		logger.Debug("control-getControlStreamByte-default")
+		n, err = s.mc.pop(mb, &controlStream)
+		if err != nil {
+			logger.Debugf("control-getControlStreamByte-err: %v", err)
+			return nil, err
+		}
 	}
-	fmt.Println("getControlStreamByte: disabled", controlStream[:n])
+	logger.Debugf("control-getControlStreamByte: disabled %v", controlStream[:n])
 	if n != streamControlLength {
 		// 如果不是流创建协议则跳过
 		return nil, ErrNonStreamControlProtocol
 	}
 
-	stream, err = c.parseStream(controlStream[:n])
+	scp := parseStreamControlProto(controlStream[:n])
+	stream, err = s.parseStream(scp)
 	if err != nil {
+		if err == net.ErrClosed {
+			return s.getControlStreamByte(ctx, controlStream)
+		}
 		return nil, err
 	}
 	return stream, nil
 }
 
 // parseStream 处理一个远程有效的Stream到本地
-// 创建默认流，默认流用于其它流的创建; streamID: 创建方随机选择, stat: 对上一个流的确认(0: false/1: true/2: any)
-// 1. 远程发送自选择的创建流请求[id1, stat(any)] // 创建请求会无视stat
+// 创建默认流，默认流用于其它流的控制; streamID: 创建方根据未占用的StreamID指针选择, stat: 对上一个流的确认(0: false/1: true)
+// 1. 远程发送自选择的创建流请求[id1, id1, stat(any)] // 创建请求会无视stat
 // 2. 本地判断是否冲突, 是则响应[id2, stat(false)] // 冲突返回本地可接受的随机id, 并对上一个请求进行否定
 // 3. 远程判断是否冲突, 是则沉默，否重新发送上述请求。 // 如不冲突则返回stat(true), 对上一个请求同意
-func (c *TCPConn) parseStream(cs []byte) (Stream, error) {
-	closeFlag := cs[0]
-	beforeStreamID := M.SliceToMark(cs[1:])
-	afterStreamID := M.SliceToMark(cs[5:])
-
-	if closeFlag == 1 {
-		c.err = c.mc.Del(beforeStreamID)
-		if c.err != nil {
-			return nil, c.err
+func (s *TCPConn) parseStream(scp streamControlProtocol) (quic.Stream, error) {
+	var err error
+	switch scp.TypeFlag {
+	case scpTypeFlagRequest:
+		logger.Debugf("tcp_control-parseStream-scpRequest: %v", scp.BeforeStreamID)
+		return s.createStreamProtocol(scp)
+	case scpTypeFlagStream:
+		logger.Debugf("tcp_control-parseStream-scpStreamClose: %v", scp.BeforeStreamID)
+		if err = s.mc.del(scp.BeforeStreamID); err != nil {
+			return nil, err
 		}
-		return nil, ErrStreamClosed
+		return nil, net.ErrClosed
+	case scpTypeFlagConn:
+		logger.Debugf("tcp_control-parseStream-scpConn_Code: %v", scp.AfterStreamID)
+		return nil, s.closeLocal(quic.ApplicationErrorCode(scp.AfterStreamID), scp.ExtStr)
+	default:
+		return nil, errors.New("unknown streamCreateProtocol")
 	}
+}
 
-	fmt.Println("before: ", beforeStreamID)
-	fmt.Println("after: ", afterStreamID)
-	if _, ok := c.taskMap[beforeStreamID]; ok {
-		if c.mc.HasKey(afterStreamID) {
-			c.rejectNumMutex.Lock()
-			if c.rejectNum > c.maxRejectNum {
-				c.err = ErrStreamReject
-				return nil, c.err
+func (s *TCPConn) createStreamProtocol(scp streamControlProtocol) (quic.Stream, error) {
+	logger.Debugf("control-parseStream-before: %v", scp.BeforeStreamID)
+	logger.Debugf("control-parseStream-after: %v", scp.AfterStreamID)
+	var err error
+	var stream quic.Stream
+	if _, ok := s.taskMap[scp.BeforeStreamID]; ok {
+		if s.mc.hasKey(scp.AfterStreamID) {
+			if s.rejectNum > s.maxRejectNum {
+				return nil, ErrStreamReject
 			} else {
-				c.maxRejectNum += 1
+				atomic.AddUint64(&s.rejectNum, 1)
 			}
-			c.rejectNumMutex.Unlock()
-			c.err = c.rejectStream(beforeStreamID, afterStreamID)
-			return nil, c.err
+			err = s.rejectStream(scp.BeforeStreamID, scp.AfterStreamID)
+			return nil, err
 		} else {
-			var stream Stream
-			stream, c.err = c.acceptStream(beforeStreamID, afterStreamID)
-			if c.err != nil {
-				return nil, c.err
+			stream, err = s.acceptStream(scp.BeforeStreamID, scp.AfterStreamID)
+			if err != nil {
+				return nil, err
 			}
 			return stream, nil
 		}
 	} else {
-		if c.mc.HasKey(afterStreamID) {
-			if c.rejectNum > c.maxRejectNum {
-				c.err = ErrStreamReject
-				return nil, c.err
+		if s.mc.hasKey(scp.AfterStreamID) {
+			if s.rejectNum > s.maxRejectNum {
+				err = ErrStreamReject
+				return nil, err
 			} else {
-				c.maxRejectNum += 1
+				atomic.AddUint64(&s.rejectNum, 1)
 			}
-			c.taskMap[beforeStreamID] = struct{}{}
-			c.err = c.rejectStream(beforeStreamID, afterStreamID)
-			return nil, c.err
+			s.taskMap[scp.BeforeStreamID] = struct{}{}
+			err = s.rejectStream(scp.BeforeStreamID, scp.AfterStreamID)
+			return nil, err
 		} else {
 			// 同意时无视状态码
-			var stream Stream
-			fmt.Println("accept: ", beforeStreamID, afterStreamID)
-			stream, c.err = c.acceptStream(beforeStreamID, afterStreamID)
-			if c.err != nil {
-				logger.Errorf("parseStream: %v", c.err)
-				return nil, c.err
+			logger.Debugf("control-parseStream-accept: %v, %v", scp.BeforeStreamID, scp.AfterStreamID)
+			stream, err = s.acceptStream(scp.BeforeStreamID, scp.AfterStreamID)
+			if err != nil {
+				logger.Errorf("parseStream: %v", err)
+				return nil, err
 			}
 			return stream, nil
 		}
@@ -292,43 +270,39 @@ func (c *TCPConn) parseStream(cs []byte) (Stream, error) {
 }
 
 // acceptStream 确认一个StreamID，并返回远程确认
-func (c *TCPConn) acceptStream(beforeStreamID, afterStreamID M.Mark) (stream Stream, err error) {
+func (s *TCPConn) acceptStream(beforeStreamID, afterStreamID M.Mark) (stream quic.Stream, err error) {
 	defer func() {
-		delete(c.taskMap, beforeStreamID)
+		delete(s.taskMap, beforeStreamID)
 	}()
-	sc, n := c.createStreamControlProto(streamControlOption{
-		CloseFlag:     0,
+	sc, n := createStreamControlProto(streamControlProtocol{
+		TypeFlag:      scpTypeFlagRequest,
 		AfterStreamID: afterStreamID,
 		AckFlag:       1,
 	})
-	_, err = c.writeStream(sc[:n], beforeStreamID)
+	_, err = s.writeStream(sc[:n], beforeStreamID)
 	if err != nil {
 		return nil, err
 	}
 
 	// 创建接收通道
-	err = c.mc.CreateRecv(afterStreamID)
+	err = s.mc.createRecv(afterStreamID)
 	if err != nil {
 		return nil, err
 	}
 
 	// 创建流
-	stream, err = newTCPStream(c.tcpWithCipher, afterStreamID, c)
-	if err != nil {
-		return nil, err
-	}
-	return stream, nil
+	return newTCPStream(afterStreamID, s)
 }
 
 // rejectStream 返回给流申请者一个本地能够接受的id
-func (c *TCPConn) rejectStream(beforeStreamID, afterStreamID M.Mark) (err error) {
-	afterStreamID = c.getOffsetStream(afterStreamID)
-	sc, n := c.createStreamControlProto(streamControlOption{
-		CloseFlag:     0,
+func (s *TCPConn) rejectStream(beforeStreamID, afterStreamID M.Mark) (err error) {
+	afterStreamID = s.getOffsetStream(afterStreamID)
+	sc, n := createStreamControlProto(streamControlProtocol{
+		TypeFlag:      scpTypeFlagRequest,
 		AfterStreamID: afterStreamID,
 		AckFlag:       0,
 	})
-	_, err = c.writeStream(sc[:n], beforeStreamID)
+	_, err = s.writeStream(sc[:n], beforeStreamID)
 	if err != nil {
 		return err
 	}
@@ -337,99 +311,100 @@ func (c *TCPConn) rejectStream(beforeStreamID, afterStreamID M.Mark) (err error)
 
 // tcpStreamRecv TCP多路复用
 // 收到数据包依次: 解粘包、解密(可选)、解压缩(可选)、放入MapChannel
-func (c *TCPConn) tcpStreamRecv() {
-	defer func() {
-		c.err = errors.New("tcpStreamRecv stopped")
-	}()
-
+func (s *TCPConn) tcpStreamRecv() {
 	var (
 		n              int
 		ok             bool
 		mark           M.Mark
 		mb             *M.MuxBuf
 		dataLen        uint16
+		err            error
 		compressDstBuf []byte
 
 		dataLenBuf = make([]byte, 2)
 		srcBuf     = make([]byte, socketLen)
 		dstBuf     = make([]byte, socketLen)
 
-		cipherLoss = getCipherLoss(c.cipher)
+		cipherLoss = getCipherLoss(s.cipher)
 	)
 
-	if c.compressor != nil {
-		compressDstBuf = c.compressor.GetDstBuf()
+	if s.compressor != nil {
+		compressDstBuf = s.compressor.GetDstBuf()
 	}
 
 	for {
-		// 处理粘包
-		n, c.err = c.conn.Read(dataLenBuf)
-		if c.err != nil {
-			if c.err == io.EOF {
-				logger.Info("tcpStreamRecv: ", c.err)
+		select {
+		case <-s.ctx.Done():
+			return
+		default:
+			// 处理粘包
+			n, err = s.conn.Read(dataLenBuf)
+			if err != nil {
+				if err == io.EOF {
+					logger.Info("control-tcpStreamRecv-Read: ", err)
+					return
+				} else {
+					logger.Warn(err)
+				}
 				return
-			} else {
-				logger.Error(c.err)
 			}
-			return
-		}
 
-		dataLen = binary.BigEndian.Uint16(dataLenBuf)
-
-		if dataLen == 0 || dataLen > socketLen {
-			continue
-		}
-
-		n, c.err = c.conn.Read(srcBuf[streamDataLen : dataLen+streamDataLen]) // 数据长度段不填充, 仅保留数据
-		if c.err != nil {
-			return
-		}
-
-		// 解密内容
-		if c.cipher != nil {
-			fmt.Println("srcBuf", srcBuf)
-			fmt.Println("srcBuf-de", dataLen, srcBuf[:dataLen])
-			c.err = c.cipher.Decrypt(srcBuf[:dataLen], dstBuf)
-			if c.err != nil {
-				fmt.Println("tcpStreamRecv-Decrypt", c.err, srcBuf[:dataLen])
+			dataLen = binary.BigEndian.Uint16(dataLenBuf)
+			logger.Debugf("control-tcpStreamRecv-dataLen: %v", dataLen)
+			if dataLen == 0 || dataLen > socketLen {
 				continue
 			}
-			fmt.Println("dstBuf-tc", dataLen, dstBuf[:dataLen])
-		} else {
 
-		}
-
-		// 解压缩
-		if c.compressor != nil {
-			n, c.err = c.compressor.UnCompressData(dstBuf[streamDataLen+cipherLoss:dataLen],
-				compressDstBuf)
-			if c.err != nil {
-				fmt.Println("tcpStreamRecv-UnCompressData: ", c.err, dstBuf[streamDataLen+cipherLoss:dataLen])
-				logger.Errorf("tcpStreamRecv-UnCompressData: ", c.err)
+			n, err = s.conn.Read(srcBuf[streamDataLen : dataLen+streamDataLen]) // 数据长度段不填充, 仅保留数据
+			if err != nil {
 				return
 			}
-			fmt.Println("compressDstBuf", compressDstBuf[:n-1][:streamIDLen])
-			mark = M.SliceToMark(compressDstBuf[:n-1][:streamIDLen])
-			dstBuf = compressDstBuf[streamIDLen:n]
-		} else {
-			fmt.Println("de-mark", dstBuf[:dataLen])
-			mark = M.SliceToMark(dstBuf[:dataLen][streamDataLen+cipherLoss : streamDataLen+cipherLoss+4])
-			dstBuf = dstBuf[cipherLoss+streamDataLen+streamIDLen : dataLen]
-		}
 
-		// 发送到MapChannel
-		fmt.Println("mark and dstBuf", mark, dstBuf)
+			// 解密内容
+			if s.cipher != nil {
+				logger.Debugf("control-tcpStreamRecv-srcBuf: %v", srcBuf)
+				logger.Debugf("control-tcpStreamRecv-srcBuf-de: %v, %v", dataLen, srcBuf[:dataLen])
 
-		mb, ok = c.mc.GetMuxBuf(mark)
-		if !ok {
-			logger.Errorf("tcpStreamRecv-GetMuxBuf: ", M.ErrMarkNotExist)
-			continue
+				err = s.cipher.Decrypt(srcBuf[:dataLen], dstBuf)
+				if err != nil {
+					logger.Warnf("control-tcpStreamRecv-Decrypt: %v, %v", err, srcBuf[:dataLen])
+					continue
+				}
+				logger.Debugf("control-tcpStreamRecv-dstBuf-tc: %v, %v", dataLen, dstBuf[:dataLen])
+			} else {
+				dstBuf = srcBuf
+				logger.Debugf("control-tcpStreamRecv-dstBuf-noCipher: %v, %v", dataLen, dstBuf[:dataLen])
+			}
+
+			// 解压缩
+			if s.compressor != nil {
+				n, err = s.compressor.UnCompressData(dstBuf[streamDataLen+cipherLoss:dataLen],
+					compressDstBuf)
+				if err != nil {
+					logger.Errorf("control-tcpStreamRecv-UnCompressData: %v, %v", err, dstBuf[streamDataLen+cipherLoss:dataLen])
+					continue
+				}
+				logger.Debugf("control-tcpStreamRecv-dstBuf-tc: %v, %v", dataLen, dstBuf[:dataLen])
+				mark = binary.BigEndian.Uint64(compressDstBuf[:n-1][:streamIDLen])
+				dstBuf = compressDstBuf[streamIDLen:n]
+			} else {
+				logger.Debugf("control-tcpStreamRecv-mark: %v, %v", dataLen, dstBuf[:dataLen])
+				mark = binary.BigEndian.Uint64(dstBuf[:dataLen][streamDataLen+cipherLoss : streamDataLen+cipherLoss+M.MarkLen])
+				dstBuf = dstBuf[cipherLoss+streamDataLen+streamIDLen : dataLen]
+			}
+
+			// 发送到MapChannel
+			logger.Infof("control-tcpStreamRecv-mark and dstBuf: %d, %v", mark, dstBuf)
+			mb, ok = s.mc.getMuxBuf(mark)
+			if !ok {
+				logger.Errorf("tcpStreamRecv-getMuxBuf: %v: %v", M.ErrMarkNotExist, mark)
+				continue
+			}
+			err = s.mc.push(mb, &dstBuf)
+			if err != nil {
+				logger.Errorf("tcpStreamRecv-pushCopy: %v", err)
+				return
+			}
 		}
-		c.err = c.mc.Push(mb, &dstBuf)
-		if c.err != nil {
-			logger.Errorf("tcpStreamRecv-push: ", c.err)
-			return
-		}
-		fmt.Println("push-mark", mark, dstBuf)
 	}
 }

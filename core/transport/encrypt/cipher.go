@@ -16,28 +16,30 @@ const (
 	Chacha20IetfPoly1305  = "chacha20-ietf-poly1305"
 )
 
-var (
-	ErrEmptyPassword = errors.New("ErrEmptyPassword")
-)
-
-type cipherInfo struct {
+// CipherInfo 结构包含以下字段：
+// keyLen: 密钥长度（以字节为单位）。
+// ivLen: 初始化向量（IV）长度（以字节为单位）。
+// lossLen: 加密损耗长度（以字节为单位）。
+// newAEAD: 一个函数，用于根据给定的密钥创建新的 AEAD 实例。
+type CipherInfo struct {
 	keyLen  int
 	ivLen   int
 	lossLen int
 	newAEAD func(key []byte) (*cipher.AEAD, error)
 }
 
-func (c *cipherInfo) GetIvLen() int {
+func (c *CipherInfo) GetIvLen() int {
 	return c.ivLen
 }
-func (c *cipherInfo) GetKeyLen() int {
+func (c *CipherInfo) GetKeyLen() int {
 	return c.keyLen
 }
-func (c *cipherInfo) GetLossLen() int {
+func (c *CipherInfo) GetLossLen() int {
 	return c.lossLen
 }
 
-var cipherMethod = map[string]*cipherInfo{
+// cipherMethod 是一个映射，将加密方法名称映射到相应的 CipherInfo 结构。
+var cipherMethod = map[string]CipherInfo{
 	Aes128Gcm:             {16, 12, 28, newAESGCM}, // iv: 12, tag: 16
 	Aes192Gcm:             {24, 12, 28, newAESGCM},
 	Aes256Gcm:             {32, 12, 28, newAESGCM},
@@ -49,13 +51,13 @@ type Cipher struct {
 	key  []byte
 	enc  *cipher.AEAD
 	dec  *cipher.AEAD
-	Info *cipherInfo
+	Info CipherInfo
 }
 
 // NewCipher 创建加/解密器
 func NewCipher(method, password string) (c *Cipher, err error) {
 	if password == "" {
-		return nil, ErrEmptyPassword
+		return nil, errors.New("ErrEmptyPassword")
 	}
 
 	ci, ok := cipherMethod[method]
@@ -116,11 +118,6 @@ func (c *Cipher) Encrypt(src, dst []byte) error {
 
 // Decrypt 接受所有已加密数据，会自动分割IV与TAG
 func (c *Cipher) Decrypt(src, dst []byte) error {
-	//fmt.Println("nil pointer checker: ", c.dec)
 	_, err := (*c.dec).Open(dst[:c.Info.lossLen+2], src[2:2+c.Info.ivLen], src[2+c.Info.ivLen:], nil)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
